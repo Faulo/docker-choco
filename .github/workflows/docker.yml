@@ -73,7 +73,7 @@ jobs:
         env:
           IMAGE_TAG: ${{matrix.tag}}
         run: |
-          $target = "$env:DOCKERHUB_USERNAME/choco:$env:IMAGE_TAG"
+          $target = "faulo/choco:$env:IMAGE_TAG"
           docker image tag "tmp/choco:$env:IMAGE_TAG" $target
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           docker image push $target
