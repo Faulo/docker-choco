@@ -1,4 +1,17 @@
-.reports/
-*.log
+# == Windows ==
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# == .NET ==
 **/bin/
 **/obj/
+
+# == Java ==
+**/target/
+out/
+
+# == DevOps ==
+.ai/
+.reports/

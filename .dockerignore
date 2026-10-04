@@ -1,5 +1,18 @@
-.git
-.github
-README.md
+# == Windows ==
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# == .NET ==
 **/bin/
 **/obj/
+
+# == DevOps ==
+.git/
+.github/
+.jenkins/
+.idea/
+.settings/
+.ai/
+.reports/
