@@ -1,0 +1,80 @@
+name: Docker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - windows/**
+      - .dockerignore
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+  schedule:
+    - cron: '41 3 1 * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: windows-ltsc2019
+            base: mcr.microsoft.com/windows:ltsc2019
+            chocolatey: '1.4.0'
+          - tag: windowsservercore-ltsc2019
+            base: mcr.microsoft.com/dotnet/framework/runtime:4.8-windowsservercore-ltsc2019
+            chocolatey: '2.7.4'
+          - tag: windows-ltsc2022
+            base: mcr.microsoft.com/windows/server:ltsc2022
+            chocolatey: '2.7.4'
+          - tag: windowsservercore-ltsc2022
+            base: mcr.microsoft.com/windows/servercore:ltsc2022
+            chocolatey: '2.7.4'
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}
+      DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Start Docker
+        shell: pwsh
+        run: |
+          $service = Get-Service docker
+          if ($service.Status -ne 'Running') { Start-Service docker }
+          docker info --format '{{.OSType}}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build image
+        shell: pwsh
+        env:
+          BASE_IMAGE: ${{matrix.base}}
+          CHOCOLATEY_VERSION: ${{matrix.chocolatey}}
+          IMAGE_TAG: ${{matrix.tag}}
+        run: |
+          docker build --isolation=hyperv --platform windows/amd64 --pull --file windows/Dockerfile --build-arg "BASE_IMAGE=$env:BASE_IMAGE" --build-arg "CHOCOLATEY_VERSION=$env:CHOCOLATEY_VERSION" --tag "tmp/choco:$env:IMAGE_TAG" .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          username: ${{secrets.DOCKERHUB_USERNAME}}
+          password: ${{secrets.DOCKERHUB_TOKEN}}
+      - name: Push image
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        shell: pwsh
+        env:
+          IMAGE_TAG: ${{matrix.tag}}
+        run: |
+          $target = "$env:DOCKERHUB_USERNAME/choco:$env:IMAGE_TAG"
+          docker image tag "tmp/choco:$env:IMAGE_TAG" $target
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          docker image push $target
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
