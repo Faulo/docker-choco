@@ -5,8 +5,12 @@ on:
     branches:
       - main
     paths:
+      - common/**
       - windows/**
       - .dockerignore
+      - Directory.Build.props
+      - docker-choco.sln
+      - global.json
       - .github/workflows/docker.yml
   workflow_dispatch:
   schedule:
@@ -20,7 +24,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build-tool:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 9.0.x
+      - name: Publish choco-install
+        shell: pwsh
+        run: |
+          dotnet publish docker-choco.sln --configuration Release --runtime win-x64 --self-contained true --property:PublishSingleFile=true --property:InvariantGlobalization=true --property:DebugType=None
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path common/ChocoInstall/bin/Release/net9.0/win-x64/publish/choco-install.exe)) { throw 'choco-install.exe was not produced' }
   publish:
+    needs: build-tool
     strategy:
       fail-fast: false
       matrix:

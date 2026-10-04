@@ -30,6 +30,17 @@ example:
 docker --context windows build --isolation=hyperv --pull -f windows/Dockerfile --build-arg BASE_IMAGE=mcr.microsoft.com/windows:ltsc2019 --build-arg CHOCOLATEY_VERSION=1.4.0 -t tmp/choco:windows-ltsc2019 .
 ```
 
+`docker-choco.sln` includes the Windows-only `common/ChocoInstall` project.
+It currently builds a placeholder `choco-install.exe`; the installation logic
+has not been implemented, and the Docker images do not use this executable yet.
+Publish a standalone Windows executable with:
+
+```powershell
+dotnet publish docker-choco.sln --configuration Release --runtime win-x64 --self-contained true --property:PublishSingleFile=true --property:InvariantGlobalization=true --property:DebugType=None
+```
+
+The result is under `common/ChocoInstall/bin/Release/net9.0/win-x64/publish/`.
+
 GitHub Actions builds all four variants on pushes to `main`, on manual dispatch,
 and monthly to pick up Windows base updates. Publishing to Docker Hub requires
 the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`; without them,
