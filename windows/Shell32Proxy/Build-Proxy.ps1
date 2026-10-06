@@ -35,6 +35,12 @@ foreach ($arch in 'x64', 'x86') {
     if ($lines.Count -lt 1000) { throw "Unexpected SHELL32 export count: $($lines.Count)" }
     $response = Join-Path $output "shell32-exports-$arch.rsp"
     [IO.File]::WriteAllLines($response, [string[]] $lines)
+    # MSVC needs DLL forwarders in a module-definition file, rather than /EXPORT aliases.
+    $definition = Join-Path $output "shell32-exports-$arch.def"
+    $definitions = @('EXPORTS') + @($lines | ForEach-Object {
+        $_ -replace '^/EXPORT:', '' -replace ',@', ' @' -replace ',NONAME', ' NONAME'
+    })
+    [IO.File]::WriteAllLines($definition, [string[]] $definitions)
     & "$PSScriptRoot/validate.ps1" -OriginalPath $original -ExpectedMachine $machine -ExpectedFileBuilds $build -ExportManifest $response
     $obj = Join-Path $output "shell32-proxy-$arch.obj"
     $dll = Join-Path $output "shell32-proxy-$arch.dll"
@@ -47,7 +53,7 @@ call "$devcmd" -arch=$arch -host_arch=x64
 if errorlevel 1 exit /b 1
 cl /nologo /c /GS- /Zl /O2 /Fo"$obj" "$source"
 if errorlevel 1 exit /b 1
-link /DLL /NOENTRY /NODEFAULTLIB /MACHINE:$arch /OUT:"$dll" /IMPLIB:"$lib" "$obj" kernel32.lib shlwapi.lib @"$response"
+link /NOLOGO /DLL /NOENTRY /NODEFAULTLIB /MACHINE:$arch /OUT:"$dll" /IMPLIB:"$lib" "$obj" kernel32.lib shlwapi.lib /DEF:"$definition"
 if errorlevel 1 exit /b 1
 "@
     [IO.File]::WriteAllText($batch, $commands)
@@ -60,7 +66,7 @@ if errorlevel 1 exit /b 1
         }
     }
     if ($proxyExports.Count -ne $exports.Count) { throw 'Proxy export count differs' }
-    Remove-Item -LiteralPath $obj, $lib, $batch
+    Remove-Item -LiteralPath $obj, $lib, $batch, $definition
 }
 $x64 = (Get-FileHash -Algorithm SHA256 -LiteralPath "$output/shell32-proxy-x64.dll").Hash
 $x86 = (Get-FileHash -Algorithm SHA256 -LiteralPath "$output/shell32-proxy-x86.dll").Hash
