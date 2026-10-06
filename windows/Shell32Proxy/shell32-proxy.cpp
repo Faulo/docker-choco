@@ -2,6 +2,10 @@
 #include <shellapi.h>
 #include <shlwapi.h>
 
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma function(memcpy, memset)
+#endif
+
 extern "C" void* memcpy(void* destination, const void* source, size_t count)
 {
     auto* output = static_cast<volatile unsigned char*>(destination);
