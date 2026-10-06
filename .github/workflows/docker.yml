@@ -37,7 +37,7 @@ jobs:
       - name: Publish choco-install
         shell: pwsh
         run: |
-          dotnet publish docker-choco.sln --configuration Release --runtime win-x64 --self-contained true --property:PublishSingleFile=true --property:InvariantGlobalization=true --property:DebugType=None
+          dotnet publish --runtime win-x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path common/ChocoInstall/bin/Release/net9.0/win-x64/publish/choco-install.exe)) { throw 'choco-install.exe was not produced' }
   publish:
@@ -48,16 +48,12 @@ jobs:
         include:
           - tag: windows-ltsc2019
             base: mcr.microsoft.com/windows:ltsc2019
-            chocolatey: '1.4.0'
           - tag: windowsservercore-ltsc2019
-            base: mcr.microsoft.com/dotnet/framework/runtime:4.8-windowsservercore-ltsc2019
-            chocolatey: '2.7.4'
+            base: mcr.microsoft.com/windows/servercore:ltsc2019
           - tag: windows-ltsc2022
             base: mcr.microsoft.com/windows/server:ltsc2022
-            chocolatey: '2.7.4'
           - tag: windowsservercore-ltsc2022
             base: mcr.microsoft.com/windows/servercore:ltsc2022
-            chocolatey: '2.7.4'
     runs-on: windows-2022
     timeout-minutes: 180
     env:
@@ -71,16 +67,39 @@ jobs:
         run: |
           $service = Get-Service docker
           if ($service.Status -ne 'Running') { Start-Service docker }
-          docker info --format '{{.OSType}}'
+          docker --context default info --format '{{.OSType}}'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare LTSC 2022 SHELL32 proxies
+        if: endsWith(matrix.tag, 'ltsc2022')
+        shell: pwsh
+        env:
+          BASE_IMAGE: ${{matrix.base}}
+        run: |
+          docker --context default pull $env:BASE_IMAGE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          docker --context default create --isolation=hyperv --name shell32-source $env:BASE_IMAGE cmd.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          try {
+            $x64 = Join-Path $env:RUNNER_TEMP 'shell32-x64.dll'
+            $x86 = Join-Path $env:RUNNER_TEMP 'shell32-x86.dll'
+            docker --context default cp 'shell32-source:C:/Windows/System32/shell32.dll' $x64
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            docker --context default cp 'shell32-source:C:/Windows/SysWOW64/shell32.dll' $x86
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            ./windows/Shell32Proxy/Build-Proxy.ps1 -OsBase ltsc2022 -OriginalX64 $x64 -OriginalX86 $x86
+          } finally {
+            docker --context default rm shell32-source
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to remove SHELL32 source container' }
+          }
       - name: Build image
         shell: pwsh
         env:
           BASE_IMAGE: ${{matrix.base}}
-          CHOCOLATEY_VERSION: ${{matrix.chocolatey}}
+          CHOCOLATEY_VERSION: '1.4.0'
           IMAGE_TAG: ${{matrix.tag}}
         run: |
-          docker build --isolation=hyperv --platform windows/amd64 --pull --file windows/Dockerfile --build-arg "BASE_IMAGE=$env:BASE_IMAGE" --build-arg "CHOCOLATEY_VERSION=$env:CHOCOLATEY_VERSION" --tag "tmp/choco:$env:IMAGE_TAG" .
+          $osBase = $env:IMAGE_TAG -replace '^.*-', ''
+          docker --context default build --isolation=hyperv --platform windows/amd64 --pull --file windows/Dockerfile --build-arg "BASE_IMAGE=$env:BASE_IMAGE" --build-arg "OS_BASE=$osBase" --build-arg "CHOCOLATEY_VERSION=$env:CHOCOLATEY_VERSION" --tag "tmp/choco:$env:IMAGE_TAG" .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Log in to Docker Hub
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
@@ -95,7 +114,7 @@ jobs:
           IMAGE_TAG: ${{matrix.tag}}
         run: |
           $target = "faulo/choco:$env:IMAGE_TAG"
-          docker image tag "tmp/choco:$env:IMAGE_TAG" $target
+          docker --context default image tag "tmp/choco:$env:IMAGE_TAG" $target
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          docker image push $target
+          docker --context default image push $target
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -16,3 +16,4 @@ $RECYCLE.BIN/
 .settings/
 .ai/
 .reports/
+.env

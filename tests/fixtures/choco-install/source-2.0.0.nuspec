@@ -1,0 +1,11 @@
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>docker-choco-contract-shared</id>
+    <version>2.0.0</version>
+    <authors>docker-choco</authors>
+    <description>Compatible integration test dependency.</description>
+  </metadata>
+  <files>
+    <file src="content/marker.txt" target="content" />
+  </files>
+</package>

@@ -1,10 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
+        <PublishSingleFile>true</PublishSingleFile>
+        <PublishSelfContained>true</PublishSelfContained>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <DebugType>none</DebugType>
         <AssemblyName>choco-install</AssemblyName>
         <RootNamespace>ChocoInstall</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="NuGet.Versioning" Version="7.*" />
+    </ItemGroup>
 </Project>

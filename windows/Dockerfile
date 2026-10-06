@@ -1,17 +1,30 @@
-ARG BASE_IMAGE=mcr.microsoft.com/dotnet/framework/runtime:4.8-windowsservercore-ltsc2019
+ARG BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019
+
+FROM mcr.microsoft.com/dotnet/sdk:9.0-nanoserver-1809 AS build
+
+WORKDIR C:/solution
+
+ENV NUGET_PACKAGES=C:/nuget/packages
+
+COPY . .
+
+RUN dotnet publish --runtime win-x64
+
 FROM ${BASE_IMAGE}
 
 SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-ARG CHOCOLATEY_VERSION=2.7.4
-RUN $key = 'HKLM:/SOFTWARE/Microsoft/NET Framework Setup/NDP/v4/Full'; \
-    $release = (Get-ItemProperty -Path $key -ErrorAction Stop).Release; \
-    $minimumRelease = if ($env:CHOCOLATEY_VERSION.StartsWith('1.')) { 378389 } else { 528040 }; \
-    if ($release -lt $minimumRelease) { throw ('Framework version is too old for Chocolatey ' + $env:CHOCOLATEY_VERSION + '; release=' + $release) }; \
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
-    $env:chocolateyVersion = $env:CHOCOLATEY_VERSION; \
-    Invoke-Expression ((New-Object Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
-    $installedVersion = (choco --version).Trim(); \
-    if ($LASTEXITCODE -ne 0 -or $installedVersion -ne $env:CHOCOLATEY_VERSION) { throw ('Unexpected Chocolatey version: ' + $installedVersion) }; \
-    choco list --limit-output | Out-Null; \
-    if ($LASTEXITCODE -ne 0) { throw 'Chocolatey package listing failed' }
+ARG OS_BASE=ltsc2019
+COPY windows/Shell32Proxy C:/choco/Shell32Proxy
+# Fresh container processes must load the proxy after KnownDLLs are replaced.
+RUN & C:/choco/Shell32Proxy/install.ps1 -OsBase $env:OS_BASE; \
+    Remove-Item -LiteralPath C:/choco/Shell32Proxy -Recurse -Force
+
+ARG CHOCOLATEY_VERSION=1.4.0
+RUN $env:chocolateyVersion = $env:CHOCOLATEY_VERSION; \
+    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')); \
+    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) { throw 'Chocolatey installation failed' }
+
+COPY --from=build C:/solution/common/ChocoInstall/bin/Release/net9.0/win-x64/publish/choco-install.exe C:/choco/bin/choco-install.exe
+
+ENV PATH="C:\\choco\\bin;C:\\ProgramData\\chocolatey\\bin;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
