@@ -91,6 +91,10 @@ def pesterProject(config) {
 
                 checkout scm
 
+                if (!fileExists('.env')) {
+                    writeFile file: '.env', text: readTrusted('.env.example')
+                }
+
                 dir('.reports') {
                     deleteDir()
                 }

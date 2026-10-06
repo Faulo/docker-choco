@@ -77,6 +77,9 @@ arguments so a new major
 release cannot silently change the base image contract.
 
 The Jenkins configuration targets Dende and both LTSC 2019 variants. Pester
+reads the root `.env` for the image namespace, name, and Docker run arguments.
+For a fresh checkout, copy `.env.example` to `.env`; Jenkins does this when
+the file is missing and preserves any existing configuration. Pester
 discovers the tests under `tests/`; image behavior is checked in CI instead of
 adding smoke-test layers to the Dockerfile. `Shell32.Tests.ps1` exercises
 `FindExecutableW`, `ShellExecuteExW`, and the unrelated `CommandLineToArgvW`
