@@ -2,8 +2,8 @@
 
 `faulo/choco` provides clean Windows images with Chocolatey 1.4.0 on every tag
 and `choco-install` on `PATH`. The command accepts multiple `.nuspec` paths,
-packs and installs all of them, and honors their dependency constraints
-together. The images add no application packages of their own.
+packs and installs all of them, and resolves their complete dependency graph
+together before installation. The images add no application packages of their own.
 
 | Tag | Promised Windows capability |
 | --- | --- |
@@ -53,14 +53,43 @@ pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context dende -Varia
 ```
 
 `docker-choco.sln` includes the Windows-only `common/ChocoInstall` project.
-`choco-install` packs each supplied manifest, intersects dependency version
-ranges from their flat dependency lists, applies those constraints to the
-packed manifests, and passes all manifest package IDs to one `choco install`
-command. Failed installations are attempted up to five times, with waits of
-5, 10, 15, and 20 seconds between attempts. The temporary package source and
-packed files are removed afterwards. Dependency groups are not supported.
-Publish a standalone Windows
-executable with:
+`choco-install` preserves each supplied manifest's exact package version. It
+reads version-specific manifests from packed roots, installed packages, and
+enabled Chocolatey package sources, merging IDs case-insensitively. All direct
+and transitive NuGet ranges apply together. Dependencies use the newest compatible
+stable version; an explicit prerelease constraint can select a prerelease.
+The planner backtracks to older versions when necessary and recomputes their
+dependency edges. Impossible constraints, missing packages or metadata, and
+cycles fail before any installation begins. Dependency groups remain unsupported.
+
+Existing installed versions constrain the plan and are reused when compatible.
+The command does not upgrade or downgrade installed packages. Conflicting
+installed versions and constraints from installed consumers cause a planning
+failure. Packed root manifests take precedence over repository metadata.
+Local package directories and NuGet feeds use enabled sources in Chocolatey's
+configuration, including its encrypted username/password credentials. Sources
+requiring client certificates must first be staged in a local package source.
+
+The resulting plan is printed and installed deterministically, dependencies
+before dependents. Each command selects one exact version with
+`--ignore-dependencies`, using staged packages so implicit installation cannot
+bypass retries. Each package gets up to five attempts with waits of 5, 10, 15,
+and 20 seconds. Retries use `--force` to rerun installers that left an installed
+record after a failed result; completed packages are never replayed. After a
+package exhausts its budget, independent branches continue and dependents are
+reported as blocked, with package versions, attempt counts, and exit codes.
+
+Install codes 0, 1641, and 3010 finish that package successfully. Reboot codes are
+reported and execution continues. Other codes, including 2, 350, 1604, 1605, and
+1614, are installation failures. Chocolatey 1.4.0 itself records 1605/1614 as
+installed, but these uninstall results do not establish successful installation.
+Pack, source-management, and installed-state queries require code 0. Overall
+success returns 0, including mixed reboot-success results; required failures,
+blocked packages, or cleanup failures return 1. No arguments returns usage code 2.
+Stdout/stderr are preserved. Temporary sources and staged packages are cleaned
+up on success and failure; cleanup diagnostics cannot hide the primary error.
+
+Publish a standalone Windows executable with:
 
 ```powershell
 dotnet publish --runtime win-x64
@@ -88,6 +117,15 @@ temporary file association inside a disposable container and checks nonexistent
 file lookup, executable paths and arguments containing spaces, the working
 directory, process handles, and child exit status. The fixture does not install
 the proxy. These tests apply to both image families.
+
+`ChocoInstall.Tests.ps1` runs the actual standalone executable against a stateful
+Chocolatey mock and fixture package feed, without downloads or real installers.
+It covers a seven-package chain failing once per package, shared and diamond
+dependencies, backtracking with changed edges, pre-install rejection, blocked
+dependents, installed state, argument boundaries and paths with spaces, all
+command-result policies, output preservation, and cleanup. It also verifies
+Chocolatey 1.4.0's real 1605/1614 behavior using inert package scripts. The original
+real-Chocolatey multi-manifest installation check remains in `Choco.Tests.ps1`.
 
 Survey of the sibling Docker projects:
 
