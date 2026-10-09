@@ -62,7 +62,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $env:WINDIR 'System32/cmd.exe') -Pat
         Invoke-WindowsImage -Script $script | Should -Be 'SHELL_OK'
     }
 
-    It 'has Chocolatey 1 installed and no application packages' {
+    It 'has Chocolatey 1 installed and only base prerequisite packages' {
         $script = @'
 $ErrorActionPreference = 'Stop'
 $version = (choco --version).Trim()
@@ -78,7 +78,7 @@ $packages | ForEach-Object { "PACKAGE=$_" }
         $packages = @($output -split '\r?\n' | Where-Object { $_ -like 'PACKAGE=*' })
         $packages.Count | Should -BeGreaterThan 0
         foreach ($package in $packages) {
-            $package | Should -Match '^PACKAGE=chocolatey(?:-[^|]+)?\|'
+            $package | Should -Match '^PACKAGE=(?:chocolatey(?:-[^|]+)?|vcredist(?:2005|2008|2010|2012|2013|2015|140)|kb(?:2919355|2919442|2999226|3033929|3035131))\|'
         }
     }
 

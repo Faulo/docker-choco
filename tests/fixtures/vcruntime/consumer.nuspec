@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package>
+    <metadata>
+        <id>docker-choco-vc-consumer</id>
+        <version>1.0.0</version>
+        <authors>docker-choco tests</authors>
+        <description>Offline dependency reuse contract.</description>
+        <dependencies>
+            <dependency id="vcredist2005" />
+            <dependency id="vcredist2008" />
+            <dependency id="vcredist2010" />
+            <dependency id="vcredist2012" />
+            <dependency id="vcredist2013" />
+            <dependency id="vcredist140" />
+            <dependency id="vcredist2015" />
+        </dependencies>
+    </metadata>
+    <files>
+        <file src="tools\**" target="tools" />
+    </files>
+</package>
