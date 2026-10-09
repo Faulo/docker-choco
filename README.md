@@ -3,7 +3,8 @@
 `faulo/choco` provides clean Windows images with Chocolatey 1.4.0 on every tag
 and `choco-install` on `PATH`. The command accepts multiple `.nuspec` paths,
 packs and installs all of them, and resolves their complete dependency graph
-together before installation. The images add no application packages of their own.
+together before installation. All variants include Visual C++ runtime prerequisites;
+the images add no application packages of their own.
 
 | Tag | Promised Windows capability |
 | --- | --- |
@@ -25,6 +26,36 @@ Chocolatey 1 runs with the Framework already supplied by both Windows image
 families, including full Windows LTSC 2019. The integration tests verify the
 Chocolatey version and installed package list.
 
+All variants provide the Visual C++ 2005, 2008, 2010, 2012, 2013, and current v14
+runtimes in both x86 and x64 architectures. Runtime package versions roll forward
+with the Chocolatey feed when the image is rebuilt. The installed package records
+include `vcredist2005`, `vcredist2008`, `vcredist2010`, `vcredist2012`,
+`vcredist2013`, `vcredist140`, and the metadata-only `vcredist2015` alias.
+Their Chocolatey extensions and legacy KB dependency records are also retained;
+the KB installers skip updates that do not apply to the Windows base.
+Compatible downstream dependencies reuse these records without downloading
+runtime metadata or running runtime installers again. Explicit constraints that
+exclude a base package's installed version still fail before installation.
+
+The older runtimes use their Chocolatey installers, preserving Windows side-by-side
+assemblies. The v14 executable bootstrapper can stall in Windows containers, so
+the base installs its embedded Microsoft Minimum and Additional MSI packages
+directly with the setup properties from Microsoft's bundle manifest, retaining
+DLLs and Windows Installer servicing registration. Downloads
+use the checksums from the selected Chocolatey package. The temporary WiX 3.14.1
+extraction tool is also checksum-verified and removed with temporary downloads.
+The v14 MSI and cabinet payloads remain in Microsoft's package cache for repair
+and servicing. Verified downloads get up to five attempts.
+Each package gets three attempts, with a five-minute installer timeout; each v14
+MSI has a five-minute timeout. Codes 0, 1641, and 3010 are accepted.
+
+`VCRuntime.Tests.ps1` loads the CRT and C++ libraries and calls a native CRT
+function in both architectures for every runtime family. The 2005/2008 probes
+activate the registered side-by-side assemblies. An offline consumer manifest
+requires all seven package names and verifies that their installed versions are
+reused without invoking runtime installers. The consumer also exercises the
+Chocolatey extension helpers required by the runtime packages.
+
 All variants include the SHELL32 compatibility proxy used by Unity. It repairs
 association lookup for nonexistent files and launching executables through
 `ShellExecuteExW`, while forwarding other exports to the original Microsoft DLL.
@@ -35,7 +66,9 @@ image's exports; LTSC 2019 uses the validated proxy artifacts checked in here.
 
 Release candidates use the disposable `tmp/choco` namespace. The fleet validates
 both LTSC 2019 variants on Dende. LTSC 2022 cannot run on this fleet and is
-published by GitHub Actions without fleet integration coverage.
+published by GitHub Actions without fleet integration coverage. GitHub Actions
+runs the Visual C++ runtime contract on all four variants with Hyper-V isolation
+before publishing, including LTSC 2022.
 
 The repository has one Dockerfile. Its base image is an implementation detail;
 the tests verify the promised Windows capabilities. Build the LTSC 2019 RCs with:
@@ -138,13 +171,14 @@ Survey of the sibling Docker projects:
 | Standalone launchers | All siblings except the Java-based Jenkins Agent publish .NET executables | Keep publish settings in project files, use runtime-only publish commands, and test the resulting executable without an SDK in the runtime image |
 | Git on mounted workspaces | Compose Unity, Farah, Jenkins Agent, Unity; Unreal supplies Git separately | Run Git on a mounted checkout in downstream CI; the clean base need not install Git or prescribe its trust policy |
 | Tool smoke checks | Every sibling image retains checks in its Dockerfile; all also have Pester suites | Move command/version and runtime checks into each project's CI contract |
-| Visual C++ runtimes and rendering prerequisites | Farah, Compose Unity, Unity, Unreal | Validate in the consuming images; versions, fonts, graphics APIs, and compiler SDKs differ by workload |
+| Visual C++ runtimes | Farah, Compose Unity, Unity, Unreal | All six runtime families and both architectures are supplied by this base; applications retain their own launch checks |
+| Rendering prerequisites | Compose Unity, Unity, Unreal | Fonts, graphics APIs, and compiler SDKs differ by workload and remain in consuming images |
 
 Unity's COMPLUS settings and UAC changes are further candidates for shared
 container compatibility, but need a reproduced failure and tests on both image
 families before adoption. Blender associations and Unity Hub patches belong to
 the editor workflow. Unreal's compiler and SDK
-installation, Farah's Firefox/VC runtime extraction, and CI Tools' SteamCMD
+installation, Farah's Firefox extraction, and CI Tools' SteamCMD
 bootstrap should retain their own behavioral tests. Unreal DDC is a useful
 counterexample: it uses a small Server Core image and does not bootstrap
 Chocolatey or carry editor prerequisites.

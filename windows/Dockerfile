@@ -25,6 +25,11 @@ RUN $env:chocolateyVersion = $env:CHOCOLATEY_VERSION; \
     Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1')); \
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) { throw 'Chocolatey installation failed' }
 
+COPY windows/VCRuntime C:/choco/VCRuntime
+# Install shared prerequisites once, avoiding the v14 executable's container stall.
+RUN & C:/choco/VCRuntime/Install-Runtimes.ps1; \
+    Remove-Item -LiteralPath C:/choco/VCRuntime -Recurse -Force
+
 COPY --from=build C:/solution/common/ChocoInstall/bin/Release/net9.0/win-x64/publish/choco-install.exe C:/choco/bin/choco-install.exe
 
 ENV PATH="C:\\choco\\bin;C:\\ProgramData\\chocolatey\\bin;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0"
