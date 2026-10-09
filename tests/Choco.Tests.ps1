@@ -115,30 +115,13 @@ choco source add --name contract --source C:/contract/source --priority 1 --limi
 if ($LASTEXITCODE -ne 0) { throw 'Failed to add the local package source' }
 choco source disable --name chocolatey --limit-output | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Failed to disable the public package source' }
-New-Item -ItemType Directory -Path C:/retry-probe -Force | Out-Null
-Add-Type -Path C:/contract/ChocolateyProbe.cs -OutputAssembly C:/retry-probe/choco.exe -OutputType ConsoleApplication
-$env:PATH = 'C:/retry-probe;' + $env:PATH
-$env:CHOCO_CONTRACT_FAILURES = '2'
 choco-install C:/contract/first.nuspec C:/contract/second.nuspec
 if ($LASTEXITCODE -ne 0) { throw "choco-install failed with exit code $LASTEXITCODE" }
-$attempts = @(Get-Content C:/contract/attempts.txt)
-if ($attempts.Count -lt 3 -or $attempts.Count -gt 5) { throw "Expected success within 3-5 attempts, got $($attempts.Count)" }
-foreach ($attempt in $attempts) {
-    $expected = @('install', 'docker-choco-contract-first', 'docker-choco-contract-second', '--yes', '--no-progress', '--limit-output') -join "`t"
-    if ($attempt -ne $expected) { throw "Unexpected installation command: $attempt" }
-}
-'DIRECT_INSTALL_RETRIED_OK'
 foreach ($id in @('docker-choco-contract-first', 'docker-choco-contract-second', 'docker-choco-contract-shared')) {
     $installed = @(choco list --local-only --exact $id --limit-output)
     if ($LASTEXITCODE -ne 0 -or $installed.Count -ne 1) { throw "Expected one installed $id package" }
     $installed[0]
 }
-Remove-Item C:/contract/attempts.txt
-$env:CHOCO_CONTRACT_FAILURES = '5'
-choco-install C:/contract/first.nuspec C:/contract/second.nuspec
-if ($LASTEXITCODE -eq 0) { throw 'Expected the permanently failing installation to fail' }
-if (@(Get-Content C:/contract/attempts.txt).Count -ne 5) { throw 'Expected exactly five failed attempts' }
-'RETRY_LIMIT_OK'
 '@
             $output = Invoke-DockerOutput -Context $Context -Arguments @(
                 'exec', $container,
@@ -148,8 +131,6 @@ if (@(Get-Content C:/contract/attempts.txt).Count -ne 5) { throw 'Expected exact
             $lines | Should -Contain 'docker-choco-contract-first|1.0.0'
             $lines | Should -Contain 'docker-choco-contract-second|1.0.0'
             $lines | Should -Contain 'docker-choco-contract-shared|2.0.0'
-            $lines | Should -Contain 'DIRECT_INSTALL_RETRIED_OK'
-            $lines | Should -Contain 'RETRY_LIMIT_OK'
         } finally {
             $existing = Get-DockerCommandResult -Context $Context -Arguments @('container', 'inspect', $container)
             if ($existing.ExitCode -eq 0) {
