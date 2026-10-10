@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$bootstrapper = Join-Path $env:TEMP 'vs_buildtools.exe'
+# Keep the download outside the installer's temporary extraction directory.
+$bootstrapper = Join-Path $PSScriptRoot 'vs_buildtools.exe'
 Write-Output 'Downloading Visual C++ build tools'
 Invoke-WebRequest -UseBasicParsing -Uri 'https://aka.ms/vs/17/release/vs_buildtools.exe' -OutFile $bootstrapper -TimeoutSec 120
 try {
@@ -12,7 +13,8 @@ try {
         '--add', 'Microsoft.VisualStudio.Workload.VCTools',
         '--includeRecommended',
         '--add', 'Microsoft.VisualStudio.Component.VC.Llvm.Clang'
-    ) -NoNewWindow -Wait -PassThru
+    ) -WindowStyle Hidden -Wait -PassThru
+    Write-Output "Visual C++ toolchain installer exited with code $($installer.ExitCode)"
     if ($installer.ExitCode -notin @(0, 3010)) {
         throw "Visual C++ toolchain installation failed with exit code $($installer.ExitCode)"
     }
@@ -21,6 +23,14 @@ try {
             throw "Visual C++ toolchain is missing $tool"
         }
     }
+} catch {
+    $installationError = $_
+    Get-ChildItem -LiteralPath $env:TEMP -Filter 'dd_*_errors.log' -File -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Write-Output "Installer diagnostics: $($_.FullName)"
+            Get-Content -LiteralPath $_.FullName -ErrorAction SilentlyContinue
+        }
+    throw $installationError
 } finally {
     # The Visual Studio bootstrapper may remove itself during installation.
     if (Test-Path -LiteralPath $bootstrapper) {
