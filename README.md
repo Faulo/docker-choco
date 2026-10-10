@@ -15,7 +15,11 @@ LTSC 2019 and LTSC 2022.
 | Tag | Microsoft base images |
 | --- | --- |
 | `windows`, `latest` | `mcr.microsoft.com/windows:ltsc2019`, `mcr.microsoft.com/windows/server:ltsc2022` |
+| `windows-ltsc2019`, `latest-ltsc2019` | `mcr.microsoft.com/windows:ltsc2019` |
+| `windows-ltsc2022`, `latest-ltsc2022` | `mcr.microsoft.com/windows/server:ltsc2022` |
 | `windowsservercore` | `mcr.microsoft.com/windows/servercore:ltsc2019`, `mcr.microsoft.com/windows/servercore:ltsc2022` |
+| `windowsservercore-ltsc2019` | `mcr.microsoft.com/windows/servercore:ltsc2019` |
+| `windowsservercore-ltsc2022` | `mcr.microsoft.com/windows/servercore:ltsc2022` |
 
 Choose Server Core for command-line tools and services. Choose a full Windows
 variant when your software needs the broader desktop, multimedia, or graphics
@@ -23,11 +27,9 @@ API surface, such as game engines.
 
 All images target `windows/amd64` and require a compatible Windows container
 host. Each family tag contains both LTSC releases; Docker selects a compatible
-image for the host. Use the family matching your required API surface, or pin an
-individual image digest when you need an exact Windows release. The former
-`windows-ltsc2019`, `windows-ltsc2022`, `windowsservercore-ltsc2019`, and
-`windowsservercore-ltsc2022` tags are retired after the migration release passes
-publication and integration validation.
+image for the host. Use the family matching your required API surface. Use an
+LTSC-specific tag when you need an exact Windows release, even when the host can run both releases. For example,
+`faulo/choco:windowsservercore-ltsc2019` selects Server Core LTSC 2019.
 
 Images are rebuilt monthly to pick up Windows and Chocolatey updates.
 All four images include the latest **Chocolatey v1**.

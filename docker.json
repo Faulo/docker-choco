@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "namespace": "$DOCKER_NAMESPACE",
   "image": "$DOCKER_IMAGE",
   "context": ".",
@@ -11,7 +11,7 @@
       ],
       "targets": [
         {
-          "id": "windows-2019",
+          "tag": "ltsc2019",
           "dockerfile": "windows/Dockerfile",
           "runner": "windows-latest",
           "buildArgs": {
@@ -20,7 +20,7 @@
           }
         },
         {
-          "id": "windows-2022",
+          "tag": "ltsc2022",
           "dockerfile": "windows/Dockerfile",
           "runner": "windows-latest",
           "buildArgs": {
@@ -34,7 +34,7 @@
       "tag": "windowsservercore",
       "targets": [
         {
-          "id": "windows-2019",
+          "tag": "ltsc2019",
           "dockerfile": "windows/Dockerfile",
           "runner": "windows-latest",
           "buildArgs": {
@@ -43,7 +43,7 @@
           }
         },
         {
-          "id": "windows-2022",
+          "tag": "ltsc2022",
           "dockerfile": "windows/Dockerfile",
           "runner": "windows-latest",
           "buildArgs": {
