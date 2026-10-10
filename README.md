@@ -32,6 +32,11 @@ publication and integration validation.
 Images are rebuilt monthly to pick up Windows and Chocolatey updates.
 All four images include the latest **Chocolatey v1**.
 
+The build generates shell compatibility proxies from each exact Microsoft base
+image using rolling LLVM releases and Microsoft CRT/SDK headers obtained through
+[xwin](https://github.com/Jake-Shadle/xwin). These compiler tools remain in the
+build stage and are absent from the published images.
+
 ## Quick start
 
 Create a `packages.nuspec` listing the packages your image needs:

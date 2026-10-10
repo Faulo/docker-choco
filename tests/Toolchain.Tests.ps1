@@ -2,39 +2,26 @@ BeforeAll {
     $script:installerScript = Join-Path $PSScriptRoot '../windows/Shell32Proxy/Install-Toolchain.ps1'
 }
 
-Describe 'Compiler toolchain installation' {
+Describe 'Compiler toolchain release selection' {
     BeforeEach {
-        Mock Invoke-WebRequest {}
-        Mock Start-Process { [pscustomobject] @{ ExitCode = 0 } }
-        Mock Test-Path { $true }
-        Mock Remove-Item {}
-        Mock Get-ChildItem { @() }
+        Mock Invoke-WebRequest { throw 'Selected Windows archives' }
+        Mock Invoke-RestMethod {
+            [pscustomobject] @{ assets = @(
+                [pscustomobject] @{ name = 'LLVM-current-win64.msi'; browser_download_url = 'https://example.com/llvm' },
+                [pscustomobject] @{ name = 'xwin-current-x86_64-pc-windows-msvc.tar.gz'; browser_download_url = 'https://example.com/xwin' }
+            ) }
+        }
     }
 
-    It 'succeeds when the bootstrapper has already removed itself' {
-        Mock Test-Path { $false } -ParameterFilter { $LiteralPath -like '*vs_buildtools.exe' }
-
-        { & $script:installerScript | Out-Null } | Should -Not -Throw
-        Should -Invoke Remove-Item -Times 0 -Exactly
+    It 'selects Windows x64 archives from rolling releases and cleans failed downloads' {
+        { & $script:installerScript -InstallPath "$TestDrive/toolchain" | Out-Null } | Should -Throw '*Selected Windows archives*'
+        Should -Invoke Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri -eq 'https://example.com/llvm' }
+        Test-Path "$TestDrive/toolchain/downloads" | Should -BeFalse
     }
 
-    It 'accepts a successful installation requiring reboot' {
-        Mock Start-Process { [pscustomobject] @{ ExitCode = 3010 } }
-
-        { & $script:installerScript | Out-Null } | Should -Not -Throw
-        Should -Invoke Remove-Item -Times 1 -Exactly
-    }
-
-    It 'reports the installer failure when the bootstrapper has disappeared' {
-        Mock Start-Process { [pscustomobject] @{ ExitCode = 5003 } }
-        Mock Test-Path { $false } -ParameterFilter { $LiteralPath -like '*vs_buildtools.exe' }
-
-        { & $script:installerScript | Out-Null } | Should -Throw '*installation failed with exit code 5003*'
-    }
-
-    It 'fails when a successful installer did not provide the compiler' {
-        Mock Test-Path { $false } -ParameterFilter { $LiteralPath -like '*clang-cl.exe' }
-
-        { & $script:installerScript | Out-Null } | Should -Throw '*missing VC/Tools/Llvm/x64/bin/clang-cl.exe*'
+    It 'rejects releases without the required architecture' {
+        Mock Invoke-RestMethod { [pscustomobject] @{ assets = @([pscustomobject] @{ name = 'LLVM-current-Linux-X64.tar.xz' }) } }
+        { & $script:installerScript -InstallPath "$TestDrive/toolchain" | Out-Null } | Should -Throw '*Expected one Windows x64 package*'
+        Should -Invoke Invoke-WebRequest -Times 0 -Exactly
     }
 }

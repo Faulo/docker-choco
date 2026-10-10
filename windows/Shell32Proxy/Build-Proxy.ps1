@@ -10,10 +10,12 @@ $ErrorActionPreference = 'Stop'
 $build = if ($OsBase -eq 'ltsc2019') { 17763 } else { 20348 }
 $output = Join-Path $PSScriptRoot $OsBase
 $null = New-Item -ItemType Directory -Force -Path $output
-$vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
-$vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Visual C++ build tools are required' }
-$devcmd = Join-Path $vs 'Common7/Tools/VsDevCmd.bat'
+if (-not $env:CHOCO_TOOLCHAIN_ROOT) {
+    $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+    $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Visual C++ build tools are required' }
+    $devcmd = Join-Path $vs 'Common7/Tools/VsDevCmd.bat'
+}
 $compiler = Join-Path $LlvmBin 'clang-cl.exe'
 $linker = Join-Path $LlvmBin 'lld-link.exe'
 foreach ($tool in $compiler, $linker) {
@@ -48,10 +50,15 @@ foreach ($arch in 'x64', 'x86') {
     $batch = Join-Path $output "build-$arch.bat"
     $source = Join-Path $PSScriptRoot 'shell32-proxy.cpp'
     $target = if ($arch -eq 'x86') { 'i686-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
+    $environment = if ($env:CHOCO_TOOLCHAIN_ROOT) {
+        $root = $env:CHOCO_TOOLCHAIN_ROOT
+        "set INCLUDE=$root/crt/include;$root/sdk/include/ucrt;$root/sdk/include/shared;$root/sdk/include/um`r`nset LIB=$root/sdk/lib/um/$arch"
+    } else {
+        "call `"$devcmd`" -arch=$arch -host_arch=x64`r`nif errorlevel 1 exit /b 1"
+    }
     $commands = @"
 @echo off
-call "$devcmd" -arch=$arch -host_arch=x64
-if errorlevel 1 exit /b 1
+$environment
 "$compiler" --target=$target /nologo /c /GS- /Zl /O2 /Fo"$obj" "$source"
 if errorlevel 1 exit /b 1
 "$linker" /NOLOGO /DLL /NOENTRY /NODEFAULTLIB /MACHINE:$arch /timestamp:0 /OUT:"$dll" /IMPLIB:"$lib" "$obj" kernel32.lib shlwapi.lib @"$response"
