@@ -2,19 +2,10 @@ name: Docker
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - common/**
-      - windows/**
-      - .dockerignore
-      - Directory.Build.props
-      - docker-choco.sln
-      - global.json
-      - .github/workflows/docker.yml
+    branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: '41 3 1 * *'
+    - cron: "17 3 1 * *"
 
 permissions:
   contents: read
@@ -24,125 +15,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-tool:
-    runs-on: windows-2022
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 9.0.x
-      - name: Test Chocolatey version selection
-        shell: pwsh
-        run: |
-          Install-PSResource -Name Pester -Scope CurrentUser -TrustRepository -AcceptLicense -Quiet
-          Import-Module Pester
-          $configuration = New-PesterConfiguration
-          $configuration.Run.Path = 'tests/build'
-          $configuration.Run.Exit = $true
-          $configuration.Output.Verbosity = 'Detailed'
-          Invoke-Pester -Configuration $configuration
-      - name: Publish choco-install
-        shell: pwsh
-        run: |
-          dotnet publish --runtime win-x64
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path common/ChocoInstall/bin/Release/net9.0/win-x64/publish/choco-install.exe)) { throw 'choco-install.exe was not produced' }
-  publish:
-    needs: build-tool
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - tag: windows-ltsc2019
-            base: mcr.microsoft.com/windows:ltsc2019
-          - tag: windowsservercore-ltsc2019
-            base: mcr.microsoft.com/windows/servercore:ltsc2019
-          - tag: windows-ltsc2022
-            base: mcr.microsoft.com/windows/server:ltsc2022
-          - tag: windowsservercore-ltsc2022
-            base: mcr.microsoft.com/windows/servercore:ltsc2022
-    runs-on: windows-2022
-    timeout-minutes: 180
-    env:
-      DOCKERHUB_USERNAME: ${{secrets.DOCKERHUB_USERNAME}}
-      DOCKERHUB_TOKEN: ${{secrets.DOCKERHUB_TOKEN}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Start Docker
-        shell: pwsh
-        run: |
-          $service = Get-Service docker
-          if ($service.Status -ne 'Running') { Start-Service docker }
-          docker --context default info --format '{{.OSType}}'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Prepare LTSC 2022 SHELL32 proxies
-        if: endsWith(matrix.tag, 'ltsc2022')
-        shell: pwsh
-        env:
-          BASE_IMAGE: ${{matrix.base}}
-        run: |
-          docker --context default pull $env:BASE_IMAGE
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          docker --context default create --isolation=hyperv --name shell32-source $env:BASE_IMAGE cmd.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          try {
-            $x64 = Join-Path $env:RUNNER_TEMP 'shell32-x64.dll'
-            $x86 = Join-Path $env:RUNNER_TEMP 'shell32-x86.dll'
-            docker --context default cp 'shell32-source:C:/Windows/System32/shell32.dll' $x64
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            docker --context default cp 'shell32-source:C:/Windows/SysWOW64/shell32.dll' $x86
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            ./windows/Shell32Proxy/Build-Proxy.ps1 -OsBase ltsc2022 -OriginalX64 $x64 -OriginalX86 $x86
-          } finally {
-            docker --context default rm shell32-source
-            if ($LASTEXITCODE -ne 0) { throw 'Failed to remove SHELL32 source container' }
-          }
-      - name: Build image
-        shell: pwsh
-        env:
-          BASE_IMAGE: ${{matrix.base}}
-          IMAGE_TAG: ${{matrix.tag}}
-        run: |
-          $osBase = $env:IMAGE_TAG -replace '^.*-', ''
-          docker --context default build --isolation=hyperv --platform windows/amd64 --pull --file windows/Dockerfile --build-arg "BASE_IMAGE=$env:BASE_IMAGE" --build-arg "OS_BASE=$osBase" --tag "tmp/choco:$env:IMAGE_TAG" .
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Validate Visual C++ runtimes
-        shell: pwsh
-        env:
-          IMAGE_TAG: ${{matrix.tag}}
-        run: |
-          Copy-Item .env.example .env
-          $settings = (Get-Content .env -Raw) -replace '(?m)^DOCKER_ARGS_WINDOWS=.*$', 'DOCKER_ARGS_WINDOWS=--isolation=hyperv --memory=4GB'
-          Set-Content .env -Value $settings -NoNewline
-          pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context default -Variant $env:IMAGE_TAG -TestsPath tests/VCRuntime.Tests.ps1 -ResultsPath .reports/vcruntime.xml
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Validate Firefox, shell compatibility, and PATH persistence
-        shell: pwsh
-        env:
-          IMAGE_TAG: ${{matrix.tag}}
-        run: |
-          foreach ($contract in @('Firefox', 'Shell32', 'Path')) {
-            pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context default -Variant $env:IMAGE_TAG -TestsPath "tests/$contract.Tests.ps1" -ResultsPath ".reports/$contract.xml"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-      - name: Log in to Docker Hub
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        with:
-          username: ${{secrets.DOCKERHUB_USERNAME}}
-          password: ${{secrets.DOCKERHUB_TOKEN}}
-      - name: Push image
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        shell: pwsh
-        env:
-          IMAGE_TAG: ${{matrix.tag}}
-        run: |
-          $target = "faulo/choco:$env:IMAGE_TAG"
-          docker --context default image tag "tmp/choco:$env:IMAGE_TAG" $target
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          docker --context default image push $target
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  docker:
+    uses: Faulo/workflows-docker/.github/workflows/docker.yml@v2
+    with:
+      config: docker.json
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

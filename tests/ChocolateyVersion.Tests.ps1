@@ -1,5 +1,6 @@
 BeforeAll {
-    $script:selector = Join-Path $PSScriptRoot '../../windows/Chocolatey/Get-ChocolateyVersion.ps1'
+    Set-StrictMode -Off
+    $script:selector = Join-Path $PSScriptRoot '../windows/Chocolatey/Get-ChocolateyVersion.ps1'
     $script:feedPath = Join-Path $TestDrive 'releases.xml'
 
     function ConvertTo-ReleaseFeed {

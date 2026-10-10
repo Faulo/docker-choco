@@ -25,6 +25,16 @@ param(
 BeforeAll {
     . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
 
+    if ($Variant -match '-ltsc(2019|2022)$') {
+        $expectedBuild = $Matches[1] -eq '2019' ? '17763' : '20348'
+    } else {
+        $kernelVersion = Invoke-DockerOutput -Context $Context -Arguments @('info', '--format', '{{.KernelVersion}}')
+        if ($kernelVersion -notmatch '^10\.0[ .](?<Build>\d+)') {
+            throw "Unrecognized Windows Docker host version: $kernelVersion"
+        }
+        $expectedBuild = [int] $Matches.Build -lt 20348 ? '17763' : '20348'
+    }
+
     function Invoke-WindowsImage {
         param(
             [Parameter(Mandatory)]
@@ -40,7 +50,7 @@ BeforeAll {
 
 Describe "Chocolatey image contract [$Context, $Image]" {
     It 'uses a supported Windows tag and OS build' {
-        $Variant | Should -Match '^(windows|windowsservercore)-ltsc(2019|2022)$'
+        $Variant | Should -Match '^(latest|windows|windowsservercore)(-ltsc(2019|2022))?$'
         $Os | Should -Be 'windows'
 
         $inspection = Invoke-DockerOutput -Context $Context -Arguments @(
@@ -48,7 +58,6 @@ Describe "Chocolatey image contract [$Context, $Image]" {
         ) | ConvertFrom-Json
         $inspection.Os | Should -Be 'windows'
 
-        $expectedBuild = $Variant.EndsWith('ltsc2019') ? '17763' : '20348'
         $inspection.OsVersion | Should -Match "^10\.0\.$expectedBuild\."
     }
 
@@ -96,12 +105,13 @@ $command.Source
         $fixture = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures/choco-install'))
 
         try {
-            Invoke-Docker -Context $Context -RunArguments $DockerRunArguments -Arguments @(
-                'run', '--detach', '--tty', '--name', $container, $Image, 'cmd.exe'
-            )
+            Invoke-Docker -Context $Context -Arguments (@(
+                'create', '--tty', '--name', $container
+            ) + $DockerRunArguments + @($Image, 'cmd.exe'))
             Invoke-Docker -Context $Context -Arguments @(
                 'cp', (Join-Path $fixture '.'), "${container}:C:/contract"
             )
+            Invoke-Docker -Context $Context -Arguments @('start', $container)
 
             $script = @'
 $ErrorActionPreference = 'Stop'
@@ -140,7 +150,7 @@ foreach ($id in @('docker-choco-contract-first', 'docker-choco-contract-second',
     }
 }
 
-Describe "Full Windows capability [$Context, $Image]" -Skip:($Variant -notlike 'windows-*') {
+Describe "Full Windows capability [$Context, $Image]" -Skip:($Variant -notin @('latest', 'windows') -and $Variant -notlike 'windows-*') {
     It 'provides the desktop APIs needed by game-engine images' {
         $script = @'
 $ErrorActionPreference = 'Stop'

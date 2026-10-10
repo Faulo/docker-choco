@@ -11,9 +11,10 @@ param(
 BeforeAll {
     . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
     $container = "choco-planner-$([guid]::NewGuid().ToString('N'))"
-    Invoke-Docker -Context $Context -RunArguments $DockerRunArguments -Arguments @('run', '--detach', '--tty', '--name', $container, $Image, 'cmd.exe')
+    Invoke-Docker -Context $Context -Arguments (@('create', '--tty', '--name', $container) + $DockerRunArguments + @($Image, 'cmd.exe'))
     $fixture = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures/choco-install'))
     Invoke-Docker -Context $Context -Arguments @('cp', (Join-Path $fixture '.'), "${container}:C:/planner contract")
+    Invoke-Docker -Context $Context -Arguments @('start', $container)
     $script = @'
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Path 'C:/planner contract/mock bin' -Force | Out-Null

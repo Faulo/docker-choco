@@ -7,27 +7,30 @@ resolve dependencies before installing, and fail the build when required
 packages cannot be installed.
 
 Compared with [`chocolatey/choco`](https://hub.docker.com/r/chocolatey/choco/),
-this image adds `choco-install` and a choice of four Windows base images across
+this image adds `choco-install` and two Windows image families across
 LTSC 2019 and LTSC 2022.
 
 ## Available images
 
-| Tag | Microsoft base image |
+| Tag | Microsoft base images |
 | --- | --- |
-| `windows-ltsc2019` | `mcr.microsoft.com/windows:ltsc2019` |
-| `windowsservercore-ltsc2019` | `mcr.microsoft.com/windows/servercore:ltsc2019` |
-| `windows-ltsc2022` | `mcr.microsoft.com/windows/server:ltsc2022` |
-| `windowsservercore-ltsc2022` | `mcr.microsoft.com/windows/servercore:ltsc2022` |
+| `windows`, `latest` | `mcr.microsoft.com/windows:ltsc2019`, `mcr.microsoft.com/windows/server:ltsc2022` |
+| `windowsservercore` | `mcr.microsoft.com/windows/servercore:ltsc2019`, `mcr.microsoft.com/windows/servercore:ltsc2022` |
 
 Choose Server Core for command-line tools and services. Choose a full Windows
 variant when your software needs the broader desktop, multimedia, or graphics
 API surface, such as game engines.
 
 All images target `windows/amd64` and require a compatible Windows container
-host. Use an explicit tag matching your Windows release and required API surface.
+host. Each family tag contains both LTSC releases; Docker selects a compatible
+image for the host. Use the family matching your required API surface, or pin an
+individual image digest when you need an exact Windows release. The former
+`windows-ltsc2019`, `windows-ltsc2022`, `windowsservercore-ltsc2019`, and
+`windowsservercore-ltsc2022` tags are retired after the migration release passes
+publication and integration validation.
 
 Images are rebuilt monthly to pick up Windows and Chocolatey updates.
-All four variants include the latest **Chocolatey v1**.
+All four images include the latest **Chocolatey v1**.
 
 ## Quick start
 
@@ -52,7 +55,7 @@ Create a `packages.nuspec` listing the packages your image needs:
 Install it in your Dockerfile:
 
 ```dockerfile
-FROM faulo/choco:windowsservercore-ltsc2022
+FROM faulo/choco:windowsservercore
 
 COPY packages.nuspec C:/packages/packages.nuspec
 RUN choco-install C:/packages/packages.nuspec
