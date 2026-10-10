@@ -111,6 +111,15 @@ jobs:
           Set-Content .env -Value $settings -NoNewline
           pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context default -Variant $env:IMAGE_TAG -TestsPath tests/VCRuntime.Tests.ps1 -ResultsPath .reports/vcruntime.xml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate Firefox and shell compatibility
+        shell: pwsh
+        env:
+          IMAGE_TAG: ${{matrix.tag}}
+        run: |
+          foreach ($contract in @('Firefox', 'Shell32')) {
+            pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context default -Variant $env:IMAGE_TAG -TestsPath "tests/$contract.Tests.ps1" -ResultsPath ".reports/$contract.xml"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Log in to Docker Hub
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4

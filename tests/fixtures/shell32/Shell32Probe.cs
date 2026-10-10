@@ -6,6 +6,21 @@ using System.Text;
 
 class Shell32Probe {
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct FileOperation {
+        public IntPtr Window;
+        public uint Operation;
+        public string From;
+        public string To;
+        public ushort Flags;
+        [MarshalAs(UnmanagedType.Bool)] public bool Aborted;
+        public IntPtr NameMappings;
+        public string ProgressTitle;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    static extern int SHFileOperationW(ref FileOperation operation);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     struct ShellExecuteInfo {
         public uint Size;
         public uint Mask;
@@ -87,6 +102,20 @@ class Shell32Probe {
                 }
                 if (File.ReadAllText(marker) != "C:\\shell contract") {
                     throw new Exception("ShellExecuteExW did not preserve the working directory or quoted arguments");
+                }
+            } else if (args[0] == "copy") {
+                string source = @"C:\shell contract\source-" + args[1] + ".ini";
+                string destination = @"C:\shell contract\copied-" + args[1] + ".ini";
+                File.WriteAllText(source, "[Probe]\r\nCopied=true\r\n");
+                var operation = new FileOperation {
+                    Operation = 2,
+                    From = source + "\0",
+                    To = destination + "\0",
+                    Flags = 0x614
+                };
+                int result = SHFileOperationW(ref operation);
+                if (result != 0 || operation.Aborted || File.ReadAllText(source) != File.ReadAllText(destination)) {
+                    throw new Exception("SHFileOperationW failed to copy the INI file: " + result);
                 }
             } else if (args[0] == "forwarding") {
                 int count;

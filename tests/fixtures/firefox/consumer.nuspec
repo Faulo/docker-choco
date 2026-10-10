@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>docker-choco-firefox-consumer</id>
+    <version>1.0.0</version>
+    <authors>docker-choco</authors>
+    <description>Installs Firefox through the dependency planner.</description>
+    <dependencies>
+      <dependency id="Firefox" />
+    </dependencies>
+  </metadata>
+</package>

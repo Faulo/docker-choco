@@ -64,11 +64,26 @@ DLL, the installer verifies its Microsoft signature, Windows build, architecture
 and complete export table. CI builds LTSC 2022 proxies from each selected base
 image's exports; LTSC 2019 uses the validated proxy artifacts checked in here.
 
+Ordinary `choco install firefox --yes` and Firefox dependencies installed by
+`choco-install` use Mozilla's normal installer. A Firefox-specific Chocolatey
+pre-install hook disables taskbar pinning, whose shell verb can display an
+unreachable error dialog in Server Core. Desktop and Start Menu shortcuts and
+the Mozilla Maintenance Service retain their normal installer defaults.
+Explicit native install arguments still apply, and `--skip-hooks` bypasses the hook.
+
+Shell file copies can also stall while looking up an AppX property handler through
+`Windows.Internal.StateRepository.FileTypeAssociation`, especially under Hyper-V
+isolation. The image removes only that WinRT activation registration, allowing
+the property system to fall back to its registry handlers. Packaged AppX file-type
+associations are unavailable; other WinRT classes, including Unity's UI settings
+classes, retain their registration. `Firefox.Tests.ps1` verifies fresh installs
+through both public commands and Firefox's uninstall registration.
+
 Release candidates use the disposable `tmp/choco` namespace. The fleet validates
 both LTSC 2019 variants on Dende. LTSC 2022 cannot run on this fleet and is
 published by GitHub Actions without fleet integration coverage. GitHub Actions
-runs the Visual C++ runtime contract on all four variants with Hyper-V isolation
-before publishing, including LTSC 2022.
+runs the Visual C++ runtime, Firefox installation, and shell API contracts on all
+four variants with Hyper-V isolation before publishing, including LTSC 2022.
 
 The repository has one Dockerfile. Its base image is an implementation detail;
 the tests verify the promised Windows capabilities. Build the LTSC 2019 RCs with:
@@ -138,7 +153,8 @@ Chocolatey version is shared by all variants and pinned through Docker build
 arguments so a new major
 release cannot silently change the base image contract.
 
-The Jenkins configuration targets Dende and both LTSC 2019 variants. Pester
+The Jenkins configuration targets Dende and both LTSC 2019 variants, allowing
+60 minutes per variant for installer deadlines, retries, and Windows startup. Pester
 reads the root `.env` for the image namespace, name, and Docker run arguments.
 For a fresh checkout, copy `.env.example` to `.env`; Jenkins does this when
 the file is missing and preserves any existing configuration. Pester

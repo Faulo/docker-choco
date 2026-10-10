@@ -13,10 +13,9 @@ Describe "Windows shell API contract [$Context, $Image]" {
         . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
         $container = "docker-choco-shell32-$([guid]::NewGuid().ToString('N'))"
         $fixture = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures/shell32'))
-        Invoke-Docker -Context $Context -RunArguments $DockerRunArguments -Arguments @(
-            'run', '--detach', '--tty', '--name', $container, $Image, 'cmd.exe'
-        )
+        Invoke-Docker -Context $Context -Arguments (@('create', '--tty', '--name', $container) + $DockerRunArguments + @($Image, 'cmd.exe'))
         Invoke-Docker -Context $Context -Arguments @('cp', (Join-Path $fixture '.'), "${container}:C:/shell contract")
+        Invoke-Docker -Context $Context -Arguments @('start', $container)
         foreach ($architecture in @('x64', 'x86')) {
             Invoke-DockerOutput -Context $Context -Arguments @(
                 'exec', $container, 'powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
@@ -57,6 +56,32 @@ Describe "Windows shell API contract [$Context, $Image]" {
     ) {
         Invoke-DockerOutput -Context $Context -Arguments @(
             'exec', $container, "C:/shell contract/probe-$Architecture.exe", 'forwarding'
+        ) | Should -Be 'SHELL32_OK'
+    }
+
+    It 'copies an INI file through SHFileOperationW without waiting for AppX activation [<Architecture>]' -ForEach @(
+        @{ Architecture = 'x64' }, @{ Architecture = 'x86' }
+    ) {
+        $script = @"
+`$ErrorActionPreference = 'Stop'
+`$probe = New-Object Diagnostics.Process
+`$probe.StartInfo.FileName = 'C:/shell contract/probe-$Architecture.exe'
+`$probe.StartInfo.Arguments = 'copy $Architecture'
+`$probe.StartInfo.UseShellExecute = `$false
+`$probe.StartInfo.CreateNoWindow = `$true
+`$probe.StartInfo.RedirectStandardOutput = `$true
+`$probe.StartInfo.RedirectStandardError = `$true
+try {
+    `$probe.Start() | Out-Null
+    if (-not `$probe.WaitForExit(20000)) { `$probe.Kill(); throw 'SHFileOperationW timed out' }
+    if (`$probe.ExitCode -ne 0) { throw (`$probe.StandardError.ReadToEnd()) }
+    `$probe.StandardOutput.ReadToEnd().Trim()
+} finally {
+    `$probe.Dispose()
+}
+"@
+        Invoke-DockerOutput -Context $Context -Arguments @(
+            'exec', $container, 'powershell.exe', '-NoProfile', '-NonInteractive', '-Command', $script
         ) | Should -Be 'SHELL32_OK'
     }
 }
