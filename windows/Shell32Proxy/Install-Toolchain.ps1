@@ -22,5 +22,8 @@ try {
         }
     }
 } finally {
-    Remove-Item -LiteralPath $bootstrapper -Force
+    # The Visual Studio bootstrapper may remove itself during installation.
+    if (Test-Path -LiteralPath $bootstrapper) {
+        Remove-Item -LiteralPath $bootstrapper -Force
+    }
 }

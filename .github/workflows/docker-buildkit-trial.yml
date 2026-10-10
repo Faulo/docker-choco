@@ -1,0 +1,24 @@
+name: Docker builder trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      builder:
+        description: Windows builder to validate
+        type: choice
+        options: [buildkit, classic]
+        default: buildkit
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    uses: Faulo/workflows-docker/.github/workflows/docker.yml@main
+    with:
+      config: docker.json
+      windows-builder: ${{ inputs.builder }}
+      publish: false
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
