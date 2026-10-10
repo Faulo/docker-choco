@@ -30,10 +30,12 @@ AfterAll {
 }
 
 Describe "choco-install dependency and retry contract [$Context, $Image]" {
-    It 'confirms Chocolatey 1.4.0 records uninstall-only codes as installed' {
+    It 'confirms Chocolatey v1 records uninstall-only codes as installed' {
         $script = @'
 $ErrorActionPreference = 'Stop'
-if ((choco --version).Trim() -ne '1.4.0') { throw 'This policy check requires Chocolatey 1.4.0' }
+$version = (choco --version).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'choco --version failed' }
+if ($version -notmatch '^1\.\d+\.\d+$') { throw "This policy check requires stable Chocolatey v1, got $version" }
 New-Item -ItemType Directory -Path C:/exit-contract/source -Force | Out-Null
 foreach ($code in @(1605,1614)) {
     $id = "exit-contract-$code"

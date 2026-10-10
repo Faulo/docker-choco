@@ -34,6 +34,16 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 9.0.x
+      - name: Test Chocolatey version selection
+        shell: pwsh
+        run: |
+          Install-PSResource -Name Pester -Scope CurrentUser -TrustRepository -AcceptLicense -Quiet
+          Import-Module Pester
+          $configuration = New-PesterConfiguration
+          $configuration.Run.Path = 'tests/build'
+          $configuration.Run.Exit = $true
+          $configuration.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $configuration
       - name: Publish choco-install
         shell: pwsh
         run: |
@@ -95,11 +105,10 @@ jobs:
         shell: pwsh
         env:
           BASE_IMAGE: ${{matrix.base}}
-          CHOCOLATEY_VERSION: '1.4.0'
           IMAGE_TAG: ${{matrix.tag}}
         run: |
           $osBase = $env:IMAGE_TAG -replace '^.*-', ''
-          docker --context default build --isolation=hyperv --platform windows/amd64 --pull --file windows/Dockerfile --build-arg "BASE_IMAGE=$env:BASE_IMAGE" --build-arg "OS_BASE=$osBase" --build-arg "CHOCOLATEY_VERSION=$env:CHOCOLATEY_VERSION" --tag "tmp/choco:$env:IMAGE_TAG" .
+          docker --context default build --isolation=hyperv --platform windows/amd64 --pull --file windows/Dockerfile --build-arg "BASE_IMAGE=$env:BASE_IMAGE" --build-arg "OS_BASE=$osBase" --tag "tmp/choco:$env:IMAGE_TAG" .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate Visual C++ runtimes
         shell: pwsh
@@ -111,12 +120,12 @@ jobs:
           Set-Content .env -Value $settings -NoNewline
           pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context default -Variant $env:IMAGE_TAG -TestsPath tests/VCRuntime.Tests.ps1 -ResultsPath .reports/vcruntime.xml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Validate Firefox and shell compatibility
+      - name: Validate Firefox, shell compatibility, and PATH persistence
         shell: pwsh
         env:
           IMAGE_TAG: ${{matrix.tag}}
         run: |
-          foreach ($contract in @('Firefox', 'Shell32')) {
+          foreach ($contract in @('Firefox', 'Shell32', 'Path')) {
             pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context default -Variant $env:IMAGE_TAG -TestsPath "tests/$contract.Tests.ps1" -ResultsPath ".reports/$contract.xml"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
