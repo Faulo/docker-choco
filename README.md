@@ -140,7 +140,8 @@ bypasses the hook.
 
 Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
 Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
-This repository currently has no .NET test project; the unit stage allows
-empty results.
+The NUnit tests under `tests/ChocoInstall.Tests` cover manifest parsing and
+dependency constraints without requiring Chocolatey or a Windows host. Run them
+locally with the same command. Missing test reports fail the unit stage.
 Image integration tests continue to use the targets and variants configured
 in `.jenkins/pesterProject.properties`.

@@ -12,6 +12,7 @@
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
     <ItemGroup>
+        <InternalsVisibleTo Include="ChocoInstall.Tests" />
         <PackageReference Include="NuGet.Versioning" Version="7.*" />
         <PackageReference Include="NuGet.Protocol" Version="7.*" />
         <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.*" />

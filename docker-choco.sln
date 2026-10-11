@@ -7,6 +7,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "common", "common", "{40C9E7
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChocoInstall", "common\ChocoInstall\ChocoInstall.csproj", "{778585D5-4EA2-4AF1-AC79-F2D050379623}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChocoInstall.Tests", "tests\ChocoInstall.Tests\ChocoInstall.Tests.csproj", "{3C32E2AD-D094-4145-BEA3-C097B45F7E08}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +24,13 @@ Global
 		{778585D5-4EA2-4AF1-AC79-F2D050379623}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{778585D5-4EA2-4AF1-AC79-F2D050379623}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{778585D5-4EA2-4AF1-AC79-F2D050379623}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C32E2AD-D094-4145-BEA3-C097B45F7E08}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C32E2AD-D094-4145-BEA3-C097B45F7E08}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C32E2AD-D094-4145-BEA3-C097B45F7E08}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C32E2AD-D094-4145-BEA3-C097B45F7E08}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{778585D5-4EA2-4AF1-AC79-F2D050379623} = {40C9E7E0-0AF4-4219-89BC-DC2D13DFAF8D}
+		{3C32E2AD-D094-4145-BEA3-C097B45F7E08} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
