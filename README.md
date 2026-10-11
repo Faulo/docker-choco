@@ -137,3 +137,10 @@ unreachable installer dialog in containers. Firefox otherwise uses Mozilla's
 normal installer, including its default desktop and Start Menu shortcuts and
 Maintenance Service. Explicit installer arguments still apply; `--skip-hooks`
 bypasses the hook.
+
+Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
+Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
+This repository currently has no .NET test project; the unit stage allows
+empty results.
+Image integration tests continue to use the targets and variants configured
+in `.jenkins/pesterProject.properties`.
