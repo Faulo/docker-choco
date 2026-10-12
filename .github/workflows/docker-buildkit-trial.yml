@@ -4,6 +4,12 @@ on:
   push:
     branches: [fix/4-powershell-parent-detection]
   workflow_dispatch:
+    inputs:
+      validation:
+        description: Validate a local candidate or the published images
+        type: choice
+        default: candidate
+        options: [candidate, published]
 
 permissions:
   contents: read
@@ -20,6 +26,8 @@ jobs:
   candidate:
     runs-on: windows-2025
     timeout-minutes: 180
+    env:
+      IMAGE_NAMESPACE: ${{ inputs.validation == 'published' && 'faulo' || 'tmp' }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +43,7 @@ jobs:
           docker --context windows version
           Get-ComputerInfo -Property OsName, OsVersion, WindowsVersion
       - name: Build the compatibility candidate without publication
+        if: inputs.validation != 'published'
         shell: pwsh
         run: |
           $variant = '${{ matrix.variant }}'
@@ -49,18 +58,25 @@ jobs:
           }
           docker --context windows build --isolation=hyperv --build-arg OS_BASE=$osBase --build-arg BASE_IMAGE=$baseImage --tag tmp/choco:$variant --file windows/Dockerfile .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Pull the published image
+        if: inputs.validation == 'published'
+        shell: pwsh
+        run: |
+          docker --context windows pull faulo/choco:${{ matrix.variant }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run all image integration tests
         shell: pwsh
         run: |
           $environment = Get-Content .env -Raw
           $environment -replace '(?m)^DOCKER_ARGS_WINDOWS=.*$', 'DOCKER_ARGS_WINDOWS=--isolation=hyperv' | Set-Content .env
-          pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context windows -Variant ${{ matrix.variant }}
+          pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace $env:IMAGE_NAMESPACE -Context windows -Variant ${{ matrix.variant }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Replay the failed package and dependency sequence
         shell: pwsh
         run: |
           foreach ($sequence in @('package', 'dependencies')) {
-            docker --context windows build --isolation=hyperv --build-arg BASE_IMAGE=tmp/choco:${{ matrix.variant }} --build-arg SEQUENCE=$sequence --tag tmp/choco:replay-${{ matrix.variant }}-$sequence --file tests/reproductions/powershell-core/Dockerfile .
+            $baseImage = "$env:IMAGE_NAMESPACE/choco:${{ matrix.variant }}"
+            docker --context windows build --isolation=hyperv --build-arg BASE_IMAGE=$baseImage --build-arg SEQUENCE=$sequence --tag tmp/choco:replay-${{ matrix.variant }}-$sequence --file tests/reproductions/powershell-core/Dockerfile .
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Store contract report

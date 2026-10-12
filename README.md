@@ -149,7 +149,9 @@ preserving the normal MSI installer and the warning about installing from
 The **PowerShell parent detection trial** workflow builds all four variants in
 the runner's local `tmp/` namespace, runs the full image integration suite, and
 replays the package and dependency-sequence reproductions. It does not publish
-images. The main Docker workflow publishes only when running from `main`.
+images. Dispatch it with `validation=published` to test all four published
+variants after a release. The main Docker workflow publishes only when running
+from `main`.
 
 Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
 Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
