@@ -18,5 +18,5 @@ if (-not ('ContainerProcessAncestry' -as [type])) {
 }
 if ($diagnosticMatches.Count -eq 1) {
     $updated = [regex]::Replace($source, $pattern, [Text.RegularExpressions.MatchEvaluator] { $replacement })
-    [IO.File]::WriteAllText($installer, $updated, (New-Object Text.UTF8Encoding $false))
+    [IO.File]::WriteAllText($installer, $updated, (New-Object Text.UTF8Encoding $true))
 }

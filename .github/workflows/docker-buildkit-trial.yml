@@ -9,7 +9,15 @@ permissions:
   contents: read
 
 jobs:
-  contract:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+      - run: dotnet test --logger junit
+  candidate:
     runs-on: windows-2025
     timeout-minutes: 180
     strategy:
@@ -29,24 +37,36 @@ jobs:
       - name: Build the compatibility candidate without publication
         shell: pwsh
         run: |
-          docker --context windows build --isolation=hyperv --build-arg BASE_IMAGE=faulo/choco:${{ matrix.variant }} --tag tmp/choco:${{ matrix.variant }} --file tests/reproductions/powershell-core/Candidate.Dockerfile .
+          $variant = '${{ matrix.variant }}'
+          $osBase = ($variant -split '-')[-1]
+          $family = ($variant -split '-')[0]
+          $baseImage = if ($family -eq 'windowsservercore') {
+            "mcr.microsoft.com/windows/servercore:$osBase"
+          } elseif ($osBase -eq 'ltsc2022') {
+            "mcr.microsoft.com/windows/server:$osBase"
+          } else {
+            "mcr.microsoft.com/windows:$osBase"
+          }
+          docker --context windows build --isolation=hyperv --build-arg OS_BASE=$osBase --build-arg BASE_IMAGE=$baseImage --tag tmp/choco:$variant --file windows/Dockerfile .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Run the PowerShell contract against the candidate
+      - name: Run all image integration tests
         shell: pwsh
         run: |
           $environment = Get-Content .env -Raw
           $environment -replace '(?m)^DOCKER_ARGS_WINDOWS=.*$', 'DOCKER_ARGS_WINDOWS=--isolation=hyperv' | Set-Content .env
-          New-Item -ItemType Directory -Path .reports/powershell-core -Force | Out-Null
-          Copy-Item tests/PowerShellCore.Tests.ps1 .reports/powershell-core/
-          # Keep fixture paths relative to the test file, as in the complete suite.
-          Copy-Item tests/fixtures .reports/powershell-core/fixtures -Recurse
-          Copy-Item .jenkins .reports/.jenkins -Recurse
-          pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context windows -Variant ${{ matrix.variant }} -TestsPath .reports/powershell-core
+          pwsh ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context windows -Variant ${{ matrix.variant }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Replay the failed package and dependency sequence
+        shell: pwsh
+        run: |
+          foreach ($sequence in @('package', 'dependencies')) {
+            docker --context windows build --isolation=hyperv --build-arg BASE_IMAGE=tmp/choco:${{ matrix.variant }} --build-arg SEQUENCE=$sequence --tag tmp/choco:replay-${{ matrix.variant }}-$sequence --file tests/reproductions/powershell-core/Dockerfile .
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Store contract report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: powershell-contract-${{ matrix.variant }}
+          name: image-integration-${{ matrix.variant }}
           path: .reports/report.xml
           if-no-files-found: warn

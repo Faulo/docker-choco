@@ -146,6 +146,11 @@ preserving the normal MSI installer and the warning about installing from
 `pwsh`. Diagnostic lookup failures produce a warning and installation continues.
 `--skip-hooks` bypasses this compatibility fix.
 
+The **PowerShell parent detection trial** workflow builds all four variants in
+the runner's local `tmp/` namespace, runs the full image integration suite, and
+replays the package and dependency-sequence reproductions. It does not publish
+images. The main Docker workflow publishes only when running from `main`.
+
 Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
 Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
 The NUnit tests under `tests/ChocoInstall.Tests` cover manifest parsing and

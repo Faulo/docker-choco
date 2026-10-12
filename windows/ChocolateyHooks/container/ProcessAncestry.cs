@@ -1,3 +1,4 @@
+// Windows PowerShell 5 compiles this file with C# 5 and requires explicit usings.
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -22,16 +23,16 @@ public static class ContainerProcessAncestry {
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
+    static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
-    private static extern bool Process32FirstW(IntPtr snapshot, ref ProcessEntry entry);
+    static extern bool Process32FirstW(IntPtr snapshot, ref ProcessEntry entry);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
-    private static extern bool Process32NextW(IntPtr snapshot, ref ProcessEntry entry);
+    static extern bool Process32NextW(IntPtr snapshot, ref ProcessEntry entry);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool CloseHandle(IntPtr handle);
+    static extern bool CloseHandle(IntPtr handle);
 
     public static string[] GetNames(int processId) {
         IntPtr snapshot = CreateToolhelp32Snapshot(2, 0);
@@ -85,7 +86,7 @@ public static class ContainerProcessAncestry {
         return names.ToArray();
     }
 
-    private static long GetCreationTime(uint id) {
+    static long GetCreationTime(uint id) {
         using (var process = Process.GetProcessById((int)id)) {
             return process.StartTime.ToUniversalTime().Ticks;
         }
