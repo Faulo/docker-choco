@@ -138,6 +138,14 @@ normal installer, including its default desktop and Start Menu shortcuts and
 Maintenance Service. Explicit installer arguments still apply; `--skip-hooks`
 bypasses the hook.
 
+A PowerShell Core pre-install hook replaces the package's known unbounded
+parent-process diagnostic loop with a native Windows process snapshot. The walk
+stops at repeated PIDs, missing parents, parents created after their children,
+or 128 entries. This avoids container PID-reuse cycles and CIM stalls while
+preserving the normal MSI installer and the warning about installing from
+`pwsh`. Diagnostic lookup failures produce a warning and installation continues.
+`--skip-hooks` bypasses this compatibility fix.
+
 Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
 Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
 The NUnit tests under `tests/ChocoInstall.Tests` cover manifest parsing and
