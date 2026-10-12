@@ -7,4 +7,4 @@ COPY tests/reproductions/powershell-core C:/reproduction
 COPY tests/reproductions/powershell-core/pre-install-powershell-core.ps1 C:/ProgramData/chocolatey/hooks/diagnostics/pre-install-powershell-core.ps1
 ARG SEQUENCE=package
 # hadolint shell=powershell
-RUN & ([scriptblock]::Create([IO.File]::ReadAllText('C:/reproduction/Invoke-Reproduction.ps1'))) -Sequence $env:SEQUENCE
+RUN & ([scriptblock]::Create([IO.File]::ReadAllText('C:/reproduction/Invoke-Reproduction.ps1'))) -Sequence $env:SEQUENCE -FixturePath C:/reproduction
