@@ -1,0 +1,11 @@
+<package>
+    <metadata>
+        <id>docker-choco-powershell-consumer</id>
+        <version>1.0.0</version>
+        <authors>Faulo</authors>
+        <description>PowerShell installation integration contract.</description>
+        <dependencies>
+            <dependency id="powershell-core" version="[7.6.6]" />
+        </dependencies>
+    </metadata>
+</package>
