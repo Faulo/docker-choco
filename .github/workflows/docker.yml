@@ -19,7 +19,6 @@ jobs:
     uses: Faulo/workflows-docker/.github/workflows/docker.yml@v3
     with:
       config: docker.json
-      publish: ${{ github.ref == 'refs/heads/main' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
