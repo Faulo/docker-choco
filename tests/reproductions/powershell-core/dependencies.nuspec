@@ -1,0 +1,15 @@
+<package>
+    <metadata>
+        <id>docker-choco-powershell-reproduction</id>
+        <version>1.0.0</version>
+        <authors>Faulo</authors>
+        <description>The dependency sequence preceding PowerShell in the failed build.</description>
+        <dependencies>
+            <dependency id="docker-cli" version="[29.9.0]" />
+            <dependency id="git" version="[2.56.0.2]" />
+            <dependency id="git-lfs" version="[3.8.0]" />
+            <dependency id="nodejs" version="[26.11.0]" />
+            <dependency id="powershell-core" version="[7.6.6]" />
+        </dependencies>
+    </metadata>
+</package>

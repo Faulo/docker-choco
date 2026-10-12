@@ -1,17 +1,33 @@
-name: Docker build trial
+name: PowerShell parent detection trial
 
 on:
+  push:
+    branches: [fix/4-powershell-parent-detection]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  docker:
-    uses: Faulo/workflows-docker/.github/workflows/docker.yml@v2
-    with:
-      config: docker.json
-      publish: false
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  baseline:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        sequence: [package, dependencies]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Windows daemon
+        shell: pwsh
+        run: |
+          Start-Service docker
+          docker context create windows --docker host=npipe:////./pipe/docker_engine
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          docker --context windows version
+          Get-ComputerInfo -Property OsName, OsVersion, WindowsVersion
+      - name: Reproduce on the reported published base
+        shell: pwsh
+        run: |
+          docker --context windows build --isolation=hyperv --build-arg SEQUENCE=${{ matrix.sequence }} --tag tmp/choco:parent-baseline-${{ matrix.sequence }} --file tests/reproductions/powershell-core/Dockerfile .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
