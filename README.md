@@ -31,6 +31,11 @@ image for the host. Use the family matching your required API surface. Use an
 LTSC-specific tag when you need an exact Windows release, even when the host can run both releases. For example,
 `faulo/choco:windowsservercore-ltsc2019` selects Server Core LTSC 2019.
 
+Docker publication uses `Faulo/workflows-docker@v3` with schema version `3`
+in [`docker.json`](docker.json). The `family` and `release` axes select the four
+builds, with `{{matrix.release}}` supplying `OS_BASE`. Full Windows and Server
+Core remain separate top-level families; aliases and exact LTSC tags are preserved.
+
 Images are rebuilt monthly to pick up Windows and Chocolatey updates.
 All four images include the latest **Chocolatey v1**.
 

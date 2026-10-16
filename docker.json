@@ -1,57 +1,51 @@
 {
-  "schemaVersion": 2,
-  "namespace": "$DOCKER_NAMESPACE",
-  "image": "$DOCKER_IMAGE",
-  "context": ".",
-  "variants": [
-    {
-      "tag": "windows",
-      "aliases": [
-        "latest"
-      ],
-      "targets": [
-        {
-          "tag": "ltsc2019",
-          "dockerfile": "windows/Dockerfile",
-          "runner": "windows-latest",
-          "buildArgs": {
-            "OS_BASE": "ltsc2019",
-            "BASE_IMAGE": "mcr.microsoft.com/windows:ltsc2019"
-          }
-        },
-        {
-          "tag": "ltsc2022",
-          "dockerfile": "windows/Dockerfile",
-          "runner": "windows-latest",
-          "buildArgs": {
-            "OS_BASE": "ltsc2022",
-            "BASE_IMAGE": "mcr.microsoft.com/windows/server:ltsc2022"
-          }
-        }
-      ]
+    "schemaVersion": 3,
+    "namespace": "$DOCKER_NAMESPACE",
+    "image": "$DOCKER_IMAGE",
+    "context": ".",
+    "dockerfile": "windows/Dockerfile",
+    "runner": "windows-latest",
+    "buildArgs": {
+        "OS_BASE": "{{matrix.release}}"
     },
-    {
-      "tag": "windowsservercore",
-      "targets": [
-        {
-          "tag": "ltsc2019",
-          "dockerfile": "windows/Dockerfile",
-          "runner": "windows-latest",
-          "buildArgs": {
-            "OS_BASE": "ltsc2019",
-            "BASE_IMAGE": "mcr.microsoft.com/windows/servercore:ltsc2019"
-          }
-        },
-        {
-          "tag": "ltsc2022",
-          "dockerfile": "windows/Dockerfile",
-          "runner": "windows-latest",
-          "buildArgs": {
-            "OS_BASE": "ltsc2022",
-            "BASE_IMAGE": "mcr.microsoft.com/windows/servercore:ltsc2022"
-          }
+    "matrix": {
+        "family": {
+            "tags": {
+                "windows": {
+                    "aliases": [
+                        "latest"
+                    ],
+                    "matrix": {
+                        "release": {
+                            "tags": {
+                                "ltsc2019": {
+                                    "buildArgs": {
+                                        "BASE_IMAGE": "mcr.microsoft.com/windows:ltsc2019"
+                                    }
+                                },
+                                "ltsc2022": {
+                                    "buildArgs": {
+                                        "BASE_IMAGE": "mcr.microsoft.com/windows/server:ltsc2022"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "windowsservercore": {
+                    "matrix": {
+                        "release": {
+                            "tags": {
+                                "ltsc2019": {},
+                                "ltsc2022": {}
+                            }
+                        }
+                    },
+                    "buildArgs": {
+                        "BASE_IMAGE": "mcr.microsoft.com/windows/servercore:{{matrix.release}}"
+                    }
+                }
+            }
         }
-      ]
     }
-  ]
 }
