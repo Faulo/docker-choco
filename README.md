@@ -1,6 +1,7 @@
 # Chocolatey for Windows containers
 
 [![Docker](https://github.com/Faulo/docker-choco/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Faulo/docker-choco/actions/workflows/docker.yml)
+[![Docker image updated](https://img.shields.io/docker/last-updated/faulo/choco/latest)](https://hub.docker.com/r/faulo/choco/tags?name=latest)
 [![License: MIT](https://img.shields.io/github/license/Faulo/docker-choco)](LICENSE)
 [![Platform: Windows amd64](https://img.shields.io/badge/platform-Windows%20amd64-0078D4)](#available-images)
 
