@@ -2,6 +2,8 @@
     "schemaVersion": 3,
     "namespace": "$DOCKER_NAMESPACE",
     "image": "$DOCKER_IMAGE",
+    "description": "Windows container base images with Chocolatey and resilient package installation",
+    "overviewFile": "README.md",
     "context": ".",
     "dockerfile": "windows/Dockerfile",
     "runner": "windows-latest",

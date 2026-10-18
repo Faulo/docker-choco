@@ -1,14 +1,23 @@
 # Chocolatey for Windows containers
 
+[![Docker](https://github.com/Faulo/docker-choco/actions/workflows/docker.yml/badge.svg?branch=main)](https://github.com/Faulo/docker-choco/actions/workflows/docker.yml)
+[![License: MIT](https://img.shields.io/github/license/Faulo/docker-choco)](LICENSE)
+[![Platform: Windows amd64](https://img.shields.io/badge/platform-Windows%20amd64-0078D4)](#available-images)
+
 [`faulo/choco`](https://hub.docker.com/r/faulo/choco) provides maintained Windows
 base images with Chocolatey and `choco-install` ready to use. Build your own
 images with more resilient package installation: retry failed installers,
 resolve dependencies before installing, and fail the build when required
 packages cannot be installed.
 
-Compared with [`chocolatey/choco`](https://hub.docker.com/r/chocolatey/choco/),
-this image adds `choco-install` and two Windows image families across
-LTSC 2019 and LTSC 2022.
+Use these images as the starting point for Windows toolchains, services, and
+other software installed through Chocolatey. All variants include Chocolatey
+CLI v1, Visual C++ runtimes, and compatibility fixes for unattended installation
+in containers.
+
+[Docker Hub](https://hub.docker.com/r/faulo/choco) ·
+[Image tags](https://hub.docker.com/r/faulo/choco/tags) ·
+[Report an issue](https://github.com/Faulo/docker-choco/issues)
 
 ## Available images
 
@@ -31,21 +40,15 @@ image for the host. Use the family matching your required API surface. Use an
 LTSC-specific tag when you need an exact Windows release, even when the host can run both releases. For example,
 `faulo/choco:windowsservercore-ltsc2019` selects Server Core LTSC 2019.
 
-Docker publication uses `Faulo/workflows-docker@v3` with schema version `3`
-in [`docker.json`](docker.json). The `family` and `release` axes select the four
-builds, with `{{matrix.release}}` supplying `OS_BASE`. Full Windows and Server
-Core remain separate top-level families; aliases and exact LTSC tags are preserved.
-
-Images are rebuilt monthly to pick up Windows and Chocolatey updates.
-All four images include the latest **Chocolatey v1**.
-
-The build generates shell compatibility proxies from each exact Microsoft base
-image using rolling LLVM releases and Microsoft CRT/SDK headers obtained through
-[xwin](https://github.com/Jake-Shadle/xwin). These compiler tools remain in the
-build stage and are absent from the published images.
+LTSC-specific tags select a Windows release; they still receive image updates.
+For a reproducible base image, pin its digest as well as selecting the appropriate
+family and release. See Microsoft's
+[Windows container compatibility guidance](https://learn.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/version-compatibility)
+for host requirements and isolation options.
 
 ## Quick start
 
+Use a Docker engine configured for Windows containers and a compatible host.
 Create a `packages.nuspec` listing the packages your image needs:
 
 ```xml
@@ -64,7 +67,7 @@ Create a `packages.nuspec` listing the packages your image needs:
 </package>
 ```
 
-Install it in your Dockerfile:
+Save this `Dockerfile` beside the manifest:
 
 ```dockerfile
 FROM faulo/choco:windowsservercore
@@ -73,11 +76,20 @@ COPY packages.nuspec C:/packages/packages.nuspec
 RUN choco-install C:/packages/packages.nuspec
 ```
 
+Build your image from that directory:
+
+```powershell
+docker build --pull --tag tmp/my-tools .
+```
+
 `choco-install` packs the manifest, resolves its dependencies, and installs the
 packages non-interactively. It is already on `PATH`, and an unsuccessful result
 fails the Docker build.
 
-You can supply several manifests in one invocation:
+## Using `choco-install`
+
+Pass one or more `.nuspec` paths as positional arguments. For example, inside
+your Dockerfile or a running container:
 
 ```powershell
 choco-install C:/packages/tools.nuspec C:/packages/app.nuspec
@@ -86,7 +98,7 @@ choco-install C:/packages/tools.nuspec C:/packages/app.nuspec
 Their dependencies are resolved together. Add NuGet version constraints to your
 manifests when you need specific package versions.
 
-## How `choco-install` handles failures
+### Dependency planning and retries
 
 Native `choco install` remains available. Use `choco-install` with `.nuspec`
 manifests when you want its dependency planning and retry behavior:
@@ -109,9 +121,13 @@ Installer exit codes `0`, `1641`, and `3010` count as success. Reboot codes are
 reported and installation continues. Other codes, including `1605` and `1614`,
 count as failures even when Chocolatey leaves an installed record.
 
-The command returns `0` when all required packages succeed, `1` for installation,
-planning, or cleanup failures, and `2` when called without arguments. Successful
-installations that report reboot codes still produce an overall exit code of `0`.
+The command reports its overall result through these exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | All required packages succeeded, including installations reporting reboot codes |
+| `1` | Installation, dependency planning, or cleanup failed |
+| `2` | No manifest arguments were supplied |
 
 ### Package sources and version selection
 
@@ -132,36 +148,67 @@ All variants include Visual C++ 2005, 2008, 2010, 2012, 2013, and current v14
 runtimes in both x86 and x64 architectures. Their Chocolatey package records
 are retained so compatible dependencies can reuse them without reinstalling.
 
-The images also include shell compatibility fixes for file-association lookup,
-executable launching, and shell file copies. AppX file-type association activation
-is disabled to avoid stalled file operations; other WinRT registrations remain
-available.
+Additional compatibility fixes support unattended package installation:
 
-A Chocolatey pre-install hook disables Firefox taskbar pinning to avoid an
-unreachable installer dialog in containers. Firefox otherwise uses Mozilla's
-normal installer, including its default desktop and Start Menu shortcuts and
-Maintenance Service. Explicit installer arguments still apply; `--skip-hooks`
-bypasses the hook.
+| Area | Behavior |
+| --- | --- |
+| Windows shell | Fixes file-association lookup, executable launching, and shell file copies; disables AppX file-type association activation to avoid stalled file operations |
+| Firefox | Disables taskbar pinning to avoid an installer dialog that cannot be answered in a container |
+| PowerShell Core | Bounds parent-process diagnostics to avoid hangs caused by container PID reuse or CIM queries |
 
-A PowerShell Core pre-install hook replaces the package's known unbounded
-parent-process diagnostic loop with a native Windows process snapshot. The walk
-stops at repeated PIDs, missing parents, parents created after their children,
-or 128 entries. This avoids container PID-reuse cycles and CIM stalls while
-preserving the normal MSI installer and the warning about installing from
-`pwsh`. Diagnostic lookup failures produce a warning and installation continues.
-`--skip-hooks` bypasses this compatibility fix.
+The Firefox and PowerShell Core fixes run as Chocolatey pre-install hooks and
+preserve the normal installers. Explicit installer arguments still apply;
+Chocolatey's `--skip-hooks` option bypasses these hooks. See the
+[hook implementations](windows/ChocolateyHooks) and
+[shell compatibility implementation](windows/Shell32Proxy) for technical details.
+Build-time compiler tools are absent from the published images.
 
-The **PowerShell parent detection trial** workflow builds all four variants in
-the runner's local `tmp/` namespace, runs the full image integration suite, and
-replays the package and dependency-sequence reproductions. It does not publish
-images. Dispatch it with `validation=published` to test all four published
-variants after a release. The main Docker workflow publishes only when running
-from `main`.
+Package installers still need to support unattended execution and the selected
+Windows container environment. The compatibility fixes do not guarantee that
+every Chocolatey package can run in a container.
 
-Jenkins runs `dotnet test --logger junit` in the .NET 9 SDK container on a
-Linux agent and publishes `**/TestResults.xml` with its native `junit` step.
-The NUnit tests under `tests/ChocoInstall.Tests` cover manifest parsing and
-dependency constraints without requiring Chocolatey or a Windows host. Run them
-locally with the same command. Missing test reports fail the unit stage.
-Image integration tests continue to use the targets and variants configured
-in `.jenkins/pesterProject.properties`.
+## Maintenance and updates
+
+The four variants listed above are rebuilt monthly to pick up Windows base-image
+updates and the latest stable Chocolatey **v1** release. The images currently
+target CLI v1; they do not include Chocolatey CLI v2.
+
+Published tags receive updates in place. Rebuild downstream images with
+`docker build --pull` to pick up a refreshed base. If you pin a digest, update
+that digest explicitly when adopting a newer image.
+
+## Tests and development
+
+The repository includes NUnit unit tests for manifest parsing, dependency
+constraints, and process ancestry, plus Pester integration tests for installation
+planning, retries, exit codes, runtimes, and container compatibility.
+
+To run the unit tests, install the .NET 9 SDK selected by
+[`global.json`](global.json), clone the repository, and run from its root:
+
+```powershell
+dotnet test tests/ChocoInstall.Tests/ChocoInstall.Tests.csproj
+```
+
+These unit tests do not require Chocolatey or a Windows host. The image
+integration tests under [`tests`](tests) require Pester, a compatible Windows
+container engine, and the images being tested. They exercise all four variants;
+the Docker build badge above reports image publication status.
+
+## Support and contributions
+
+[Open an issue](https://github.com/Faulo/docker-choco/issues) to report a bug or
+request an improvement. Include the image tag or digest, Windows host version,
+container isolation mode, package versions, and a minimal reproduction with
+relevant logs. Remove credentials and other private information before posting.
+
+Contributions are welcome through pull requests. Include tests for behavior
+changes and update the documentation when public commands or image contents change.
+
+## License
+
+The original code, Dockerfiles, scripts, and documentation in this repository
+are licensed under the [MIT License](LICENSE).
+Windows base images, Chocolatey, and other bundled software retain their
+respective licenses. The repository license does not replace those terms; see
+the [Windows container base-image license](https://learn.microsoft.com/en-us/virtualization/windowscontainers/images-eula).
