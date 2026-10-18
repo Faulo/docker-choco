@@ -7,6 +7,7 @@
     "context": ".",
     "dockerfile": "windows/Dockerfile",
     "runner": "windows-latest",
+    "cleanupWindowsRunner": true,
     "buildArgs": {
         "OS_BASE": "{{matrix.release}}"
     },
