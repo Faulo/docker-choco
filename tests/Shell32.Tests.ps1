@@ -1,3 +1,4 @@
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Pester binds shared image data in separate script blocks.')]
 param(
     [Parameter(Mandatory)] [string] $Namespace,
     [Parameter(Mandatory)] [string] $Name,
@@ -31,6 +32,26 @@ Describe "Windows shell API contract [$Context, $Image]" {
                 Invoke-Docker -Context $Context -Arguments @('container', 'rm', '--force', '--volumes', $container)
             }
         }
+    }
+
+    It 'preserves Microsoft system shell DLLs without renamed backing copies' {
+        $script = @'
+$ErrorActionPreference = 'Stop'
+foreach ($directory in @('System32', 'SysWOW64')) {
+    $path = Join-Path $env:WINDIR "$directory/shell32.dll"
+    $signature = Get-AuthenticodeSignature -LiteralPath $path
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|, )O=Microsoft Corporation(,|$)') {
+        throw "System shell DLL is not intact and Microsoft-signed: $path"
+    }
+    if (Test-Path -LiteralPath (Join-Path $env:WINDIR "$directory/shell32real.dll")) {
+        throw "Renamed shell backing DLL remains in $directory"
+    }
+}
+'SYSTEM_SHELL_OK'
+'@
+        Invoke-DockerOutput -Context $Context -Arguments @(
+            'exec', $container, 'powershell.exe', '-NoProfile', '-NonInteractive', '-Command', $script
+        ) | Should -Be 'SYSTEM_SHELL_OK'
     }
 
     It 'resolves registered associations for nonexistent files [<Architecture>]' -ForEach @(

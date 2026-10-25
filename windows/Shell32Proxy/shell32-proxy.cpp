@@ -2,6 +2,27 @@
 #include <shellapi.h>
 #include <shlwapi.h>
 
+extern "C" HINSTANCE WINAPI HookFindExecutableW(LPCWSTR, LPCWSTR, LPWSTR);
+extern "C" BOOL WINAPI HookShellExecuteExW(SHELLEXECUTEINFOW*);
+
+// Apphelp supplies the original entry points so other shims remain in the chain.
+struct HookApi
+{
+    const char* Module;
+    const char* Name;
+    void* Replacement;
+    void* Original;
+    void* Reserved[2];
+};
+
+namespace
+{
+HookApi hooks[] = {
+    { "shell32.dll", "FindExecutableW", reinterpret_cast<void*>(HookFindExecutableW), nullptr, {} },
+    { "shell32.dll", "ShellExecuteExW", reinterpret_cast<void*>(HookShellExecuteExW), nullptr, {} }
+};
+}
+
 #if defined(_MSC_VER) && !defined(__clang__)
 #pragma function(memcpy, memset)
 #endif
@@ -32,28 +53,14 @@ namespace
 using FindExecutableWProc = HINSTANCE (WINAPI*)(LPCWSTR, LPCWSTR, LPWSTR);
 using ShellExecuteExWProc = BOOL (WINAPI*)(SHELLEXECUTEINFOW*);
 
-HMODULE GetRealShell32()
-{
-    HMODULE module = ::GetModuleHandleW(L"shell32real.dll");
-    return module != nullptr ? module : ::LoadLibraryW(L"shell32real.dll");
-}
-
 FindExecutableWProc GetRealFindExecutableW()
 {
-    const HMODULE module = GetRealShell32();
-    return module == nullptr
-        ? nullptr
-        : reinterpret_cast<FindExecutableWProc>(
-            ::GetProcAddress(module, "FindExecutableW"));
+    return reinterpret_cast<FindExecutableWProc>(hooks[0].Original);
 }
 
 ShellExecuteExWProc GetRealShellExecuteExW()
 {
-    const HMODULE module = GetRealShell32();
-    return module == nullptr
-        ? nullptr
-        : reinterpret_cast<ShellExecuteExWProc>(
-            ::GetProcAddress(module, "ShellExecuteExW"));
+    return reinterpret_cast<ShellExecuteExWProc>(hooks[1].Original);
 }
 
 bool EqualsIgnoreCase(const wchar_t* left, const wchar_t* right)
@@ -208,5 +215,21 @@ extern "C" BOOL WINAPI HookShellExecuteExW(SHELLEXECUTEINFOW* executeInfo)
         executeInfo->hProcess = nullptr;
     }
 
+    return TRUE;
+}
+
+extern "C" HookApi* WINAPI GetHookAPIs(LPSTR, LPWSTR name, PDWORD count)
+{
+    if (::CompareStringOrdinal(name, -1, L"ChocoShell", -1, TRUE) == CSTR_EQUAL)
+    {
+        *count = static_cast<DWORD>(sizeof(hooks) / sizeof(hooks[0]));
+        return hooks;
+    }
+    *count = 0;
+    return nullptr;
+}
+
+extern "C" BOOL WINAPI NotifyShims(DWORD, void*)
+{
     return TRUE;
 }

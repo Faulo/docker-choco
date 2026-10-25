@@ -1,7 +1,5 @@
 ARG BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019
 
-FROM ${BASE_IMAGE} AS shell32-source
-
 FROM mcr.microsoft.com/windows/servercore:ltsc2019 AS shell32-build
 
 SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
@@ -12,13 +10,9 @@ RUN & C:/build/Install-Toolchain.ps1
 
 ENV CHOCO_TOOLCHAIN_ROOT=C:/BuildTools/sysroot
 
-ARG OS_BASE=ltsc2019
 COPY windows/Shell32Proxy C:/build/Shell32Proxy
-# Extract originals from the exact runtime base before any compatibility changes.
-COPY --from=shell32-source C:/Windows/System32/shell32.dll C:/build/original-x64.dll
-COPY --from=shell32-source C:/Windows/SysWOW64/shell32.dll C:/build/original-x86.dll
 # hadolint shell=powershell
-RUN & C:/build/Shell32Proxy/Build-Proxy.ps1 -OsBase $env:OS_BASE -OriginalX64 C:/build/original-x64.dll -OriginalX86 C:/build/original-x86.dll -LlvmBin C:/BuildTools/LLVM/bin
+RUN & C:/build/Shell32Proxy/Build-Proxy.ps1 -OutputPath C:/build/shims -LlvmBin C:/BuildTools/LLVM/bin
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0-nanoserver-1809 AS build
 
@@ -34,11 +28,11 @@ FROM ${BASE_IMAGE}
 
 SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-ARG OS_BASE=ltsc2019
-COPY windows/Shell32Proxy/install.ps1 windows/Shell32Proxy/validate.ps1 windows/Shell32Proxy/PeExports.ps1 C:/choco/Shell32Proxy/
-COPY --from=shell32-build C:/build/Shell32Proxy/${OS_BASE}/ C:/choco/Shell32Proxy/${OS_BASE}/
+COPY windows/Shell32Proxy/install.ps1 windows/Shell32Proxy/ShimDatabase.cs C:/choco/Shell32Proxy/
+COPY --from=shell32-build C:/build/shims/ C:/choco/Shell32Proxy/
+# Keep the Microsoft system DLLs intact; replacing them retains host CIcr pool.
 # hadolint shell=powershell
-RUN & C:/choco/Shell32Proxy/install.ps1 -OsBase $env:OS_BASE; \
+RUN & C:/choco/Shell32Proxy/install.ps1; \
     Remove-Item -LiteralPath C:/choco/Shell32Proxy -Recurse -Force
 
 COPY windows/Chocolatey C:/choco/Chocolatey

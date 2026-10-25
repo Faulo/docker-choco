@@ -56,7 +56,7 @@ jobs:
           } else {
             "mcr.microsoft.com/windows:$osBase"
           }
-          docker --context windows build --isolation=hyperv --build-arg OS_BASE=$osBase --build-arg BASE_IMAGE=$baseImage --tag tmp/choco:$variant --file windows/Dockerfile .
+          docker --context windows build --isolation=hyperv --build-arg BASE_IMAGE=$baseImage --tag tmp/choco:$variant --file windows/Dockerfile .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Pull the published image
         if: inputs.validation == 'published'
