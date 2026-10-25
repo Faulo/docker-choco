@@ -159,9 +159,14 @@ preserve the normal installers. Explicit installer arguments still apply;
 Chocolatey's `--skip-hooks` option bypasses these hooks. See the
 [hook implementations](windows/ChocolateyHooks) and
 [shell compatibility implementation](windows/Shell32Proxy) for technical details.
-Shell API fixes use a Windows application-compatibility layer in application
-processes. Microsoft system DLLs remain intact, avoiding the host CIcr paged-pool
-retention caused by replacing `shell32.dll` in process-isolated containers.
+Shell API fixes use a Windows application-compatibility layer in process-isolated
+containers and an AppInit hook in Hyper-V-isolated containers. The AppInit hook
+loads into processes that use `user32.dll`; the image enables it for both 32-bit
+and 64-bit processes and permits its unsigned DLL. Microsoft system DLLs remain
+intact, avoiding the host CIcr paged-pool retention caused by replacing
+`shell32.dll` in process-isolated containers. Windows disables AppInit when
+Secure Boot is enabled, so the shell fixes require process isolation in that
+configuration.
 Build-time compiler tools are absent from the published images.
 
 Package installers still need to support unattended execution and the selected
@@ -197,11 +202,11 @@ container engine, and the images being tested. They exercise all four variants;
 the Docker build badge above reports image publication status.
 
 The host CIcr regression test requires process isolation and a stable host
-baseline. Avoid concurrent builds and container starts during this test. When
-testing a remote Windows Docker context, its name must also resolve as an SSH
-alias for that daemon's host, with 64-bit Windows PowerShell available. The
-probe verifies the host name before measuring; Hyper-V isolation skips this
-host-kernel check.
+baseline. Avoid concurrent builds and container starts during this test. It
+reads the host kernel directly when run on the host or inside a verified
+process-isolated container on that daemon. For other remote Windows contexts,
+the context name must resolve as an SSH alias for the daemon's host, with 64-bit
+Windows PowerShell available. Hyper-V isolation skips this host-kernel check.
 
 ## Support and contributions
 

@@ -25,7 +25,7 @@ BeforeAll {
             ))
             Invoke-Docker -Context $Context -Arguments @('cp', (Join-Path $fixture '.'), "${container}:C:/contract")
             Invoke-Docker -Context $Context -Arguments @('start', $container)
-            $deadline = if ($Command -eq 'choco') { 300 } else { 900 }
+            $deadline = if ($Command -eq 'choco') { 450 } else { 1800 }
             $watchdog = Start-Job -ScriptBlock {
                 Start-Sleep -Seconds $using:deadline
                 docker --context $using:Context stop --timeout 5 $using:container

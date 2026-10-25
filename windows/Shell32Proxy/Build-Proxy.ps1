@@ -44,4 +44,31 @@ if errorlevel 1 exit /b 1
     & $env:ComSpec /c $batch
     if ($LASTEXITCODE -ne 0) { throw "Failed to build $arch shell compatibility shim" }
     Remove-Item -LiteralPath $obj, $lib, $batch
+
+    $hookDll = Join-Path $OutputPath "appinit-hook-$arch.dll"
+    $hookBatch = Join-Path $OutputPath "build-appinit-$arch.bat"
+    $hookSource = Join-Path $PSScriptRoot 'AppInitHook.cpp'
+    $minHook = Join-Path $PSScriptRoot 'MinHook/src'
+    $sources = @(
+        $hookSource,
+        (Join-Path $minHook 'hook.c'),
+        (Join-Path $minHook 'buffer.c'),
+        (Join-Path $minHook 'trampoline.c'),
+        (Join-Path $minHook "hde/hde$(if ($arch -eq 'x86') { '32' } else { '64' }).c")
+    )
+    $objects = @()
+    $lines = @('@echo off', $environment)
+    foreach ($index in 0..($sources.Count - 1)) {
+        $object = Join-Path $OutputPath "appinit-$arch-$index.obj"
+        $objects += $object
+        $lines += "`"$compiler`" --target=$target /nologo /c /GS- /Zl /O2 /W4 /Fo`"$object`" `"$($sources[$index])`""
+        $lines += 'if errorlevel 1 exit /b 1'
+    }
+    $quotedObjects = ($objects | ForEach-Object { "`"$_`"" }) -join ' '
+    $lines += "`"$linker`" /NOLOGO /DLL /NODEFAULTLIB /MACHINE:$arch /timestamp:0 /ENTRY:DllMain /OUT:`"$hookDll`" $quotedObjects kernel32.lib shell32.lib shlwapi.lib"
+    $lines += 'if errorlevel 1 exit /b 1'
+    [IO.File]::WriteAllLines($hookBatch, $lines)
+    & $env:ComSpec /c $hookBatch
+    if ($LASTEXITCODE -ne 0) { throw "Failed to build $arch AppInit hook" }
+    Remove-Item -LiteralPath ($objects + $hookBatch)
 }

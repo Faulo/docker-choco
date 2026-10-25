@@ -13,20 +13,30 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
     BeforeAll {
         . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
         $daemon = Invoke-DockerOutput -Context $Context -Arguments @('info', '--format', '{{json .}}') | ConvertFrom-Json
+        $selfInspection = Get-DockerCommandResult -Context $Context -Arguments @('container', 'inspect', '--format', '{{json .}}', $env:COMPUTERNAME.ToLowerInvariant())
+        $selfProcessContainer = $false
+        if ($selfInspection.ExitCode -eq 0) {
+            $selfContainer = ($selfInspection.Output | Out-String | ConvertFrom-Json)
+            $selfProcessContainer = $selfContainer.HostConfig.Isolation -eq 'process' -and
+                $selfContainer.Config.Hostname -eq $env:COMPUTERNAME -and
+                $selfContainer.Id.StartsWith($env:COMPUTERNAME, [StringComparison]::OrdinalIgnoreCase)
+        }
         $probePath = Join-Path $PSScriptRoot 'fixtures/kernel-pool/Read-CIcr.ps1'
         $probeSource = Get-Content -LiteralPath $probePath -Raw
         $probeEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("& { $probeSource } | ConvertTo-Json -Compress"))
 
         function Read-HostPool {
-            if ($env:COMPUTERNAME -eq $daemon.Name) {
+            if ($env:COMPUTERNAME -eq $daemon.Name -or $selfProcessContainer) {
                 $sample = & $probePath
             } else {
-                $json = & ssh -o BatchMode=yes -o ConnectTimeout=10 $Context powershell.exe -NoProfile -NonInteractive -OutputFormat Text -EncodedCommand $probeEncoded
-                if ($LASTEXITCODE -ne 0) { throw "Cannot read pool tags on Docker host $Context" }
+                $sshHost = if ($Context -eq 'default') { $daemon.Name } else { $Context }
+                $json = & ssh -o BatchMode=yes -o ConnectTimeout=10 $sshHost powershell.exe -NoProfile -NonInteractive -OutputFormat Text -EncodedCommand $probeEncoded
+                if ($LASTEXITCODE -ne 0) { throw "Cannot read pool tags on Docker host $sshHost" }
                 $sample = $json | ConvertFrom-Json
             }
-            if ($sample.HostName -ne $daemon.Name) {
-                throw "Pool probe ran on $($sample.HostName), but Docker runs on $($daemon.Name)"
+            $expectedName = if ($selfProcessContainer) { $env:COMPUTERNAME } else { $daemon.Name }
+            if ($sample.HostName -ne $expectedName) {
+                throw "Pool probe ran on $($sample.HostName), expected $expectedName for Docker host $($daemon.Name)"
             }
             return $sample
         }

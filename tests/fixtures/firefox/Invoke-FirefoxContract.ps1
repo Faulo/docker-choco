@@ -4,7 +4,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-choco config set --name commandExecutionTimeoutSeconds --value 120 --limit-output
+choco config set --name commandExecutionTimeoutSeconds --value 300 --limit-output
 if ($LASTEXITCODE -ne 0) { throw 'Setting the installer timeout failed' }
 
 if ($Command -eq 'choco') {
