@@ -1,0 +1,24 @@
+name: Rebuild choco consumers
+
+on:
+  workflow_run:
+    workflows: [Docker]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start consumer builds
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_ACTIONS_TOKEN }}
+        run: |
+          status=0
+          for repo in docker-ci-tools docker-farah docker-godot docker-jenkins-agent docker-unity; do
+            gh workflow run docker.yml --repo "Faulo/$repo" --ref main || status=1
+          done
+          exit "$status"
