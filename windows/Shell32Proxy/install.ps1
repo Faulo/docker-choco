@@ -26,7 +26,8 @@ foreach ($architecture in @(
         if ($null -eq $appInit) { throw "AppInit registry key missing for $($architecture.Name)" }
         try {
             if ($appInit.GetValue('AppInit_DLLs')) { throw "Refusing to replace existing AppInit modules for $($architecture.Name)" }
-            $appInit.SetValue('AppInit_DLLs', $hookPath, [Microsoft.Win32.RegistryValueKind]::String)
+            # System32 redirects to SysWOW64 in 32-bit application processes.
+            $appInit.SetValue('AppInit_DLLs', '%CHOCO_SHELL_HOOK%', [Microsoft.Win32.RegistryValueKind]::ExpandString)
             $appInit.SetValue('LoadAppInit_DLLs', 1, [Microsoft.Win32.RegistryValueKind]::DWord)
             # The image's unsigned hook cannot pass AppInit's signature requirement.
             $appInit.SetValue('RequireSignedAppInit_DLLs', 0, [Microsoft.Win32.RegistryValueKind]::DWord)

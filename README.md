@@ -153,21 +153,29 @@ Additional compatibility fixes support unattended package installation:
 | Windows shell | Fixes file-association lookup, executable launching, and shell file copies; disables AppX file-type association activation to avoid stalled file operations |
 | Firefox | Disables taskbar pinning to avoid an installer dialog that cannot be answered in a container |
 | PowerShell Core | Bounds parent-process diagnostics to avoid hangs caused by container PID reuse or CIM queries |
+| WinRM | Starts on demand to avoid host Code Integrity catalog retention during automatic listener initialization |
 
 The Firefox and PowerShell Core fixes run as Chocolatey pre-install hooks and
 preserve the normal installers. Explicit installer arguments still apply;
 Chocolatey's `--skip-hooks` option bypasses these hooks. See the
 [hook implementations](windows/ChocolateyHooks) and
 [shell compatibility implementation](windows/Shell32Proxy) for technical details.
-Shell API fixes use a Windows application-compatibility layer in process-isolated
-containers and an AppInit hook in Hyper-V-isolated containers. The AppInit hook
-loads into processes that use `user32.dll`; the image enables it for both 32-bit
-and 64-bit processes and permits its unsigned DLL. Microsoft system DLLs remain
-intact, avoiding the host CIcr paged-pool retention caused by replacing
-`shell32.dll` in process-isolated containers. Windows disables AppInit when
+Shell API fixes use a Windows application-compatibility layer and an AppInit
+hook where Windows permits it, including Hyper-V isolation. The hook loads into
+applications that use
+`user32.dll`; its path expands from the Docker application environment, keeping
+the unsigned hook out of container boot services. Both 32-bit and 64-bit
+applications inherit this environment, including direct `docker exec` commands.
+Microsoft system DLLs remain intact. Windows disables AppInit when
 Secure Boot is enabled, so the shell fixes require process isolation in that
 configuration.
 Build-time compiler tools are absent from the published images.
+
+WinRM remains installed, with its service startup type set to Manual. Use
+`Start-Service WinRM` when a container needs it. To restore automatic startup
+in a derived image, run `sc.exe config WinRM start= auto`. Starting WinRM can
+reintroduce the inherited Windows Server 2019 CIcr retention described in
+[issue #7](https://github.com/Faulo/docker-choco/issues/7).
 
 Package installers still need to support unattended execution and the selected
 Windows container environment. The compatibility fixes do not guarantee that
@@ -201,12 +209,22 @@ integration tests under [`tests`](tests) require Pester, a compatible Windows
 container engine, and the images being tested. They exercise all four variants;
 the Docker build badge above reports image publication status.
 
-The host CIcr regression test requires process isolation and a stable host
-baseline. Avoid concurrent builds and container starts during this test. It
+The host CIcr regression tests require a stable host baseline. Avoid concurrent
+builds and container starts during these tests. They check retained bytes and
+outstanding allocations after minimal starts and shell API use, including an idle
+observation. Jenkins runs the integration suite on Dende and Popo. The pool probe
 reads the host kernel directly when run on the host or inside a verified
 process-isolated container on that daemon. For other remote Windows contexts,
 the context name must resolve as an SSH alias for the daemon's host, with 64-bit
-Windows PowerShell available. Hyper-V isolation skips this host-kernel check.
+Windows PowerShell available. Hyper-V isolation measures the host kernel; it does
+not measure allocations inside the disposable utility VM.
+
+The pristine Microsoft full Windows LTSC 2019 image at build
+`10.0.17763.9378` itself retains 306,464 host CIcr bytes and four allocations
+per process-isolated start when SSDP Discovery initializes. The regression
+contract permits only that measured base-image amount for this exact full
+Windows build. Server Core and Hyper-V-isolated runs have no such allowance;
+a later Windows build needs a fresh baseline investigation if it changes.
 
 ## Support and contributions
 

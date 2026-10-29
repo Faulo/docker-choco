@@ -28,6 +28,9 @@ FROM ${BASE_IMAGE}
 
 SHELL ["C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe", "-ExecutionPolicy", "Bypass", "-NonInteractive", "-NoProfile", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
+# Docker supplies this to applications; boot services must not load the unsigned hook.
+ENV CHOCO_SHELL_HOOK=C:\\Windows\\System32\\ChocoHook.dll
+
 COPY windows/Shell32Proxy/install.ps1 windows/Shell32Proxy/ShimDatabase.cs C:/choco/Shell32Proxy/
 COPY --from=shell32-build C:/build/shims/ C:/choco/Shell32Proxy/
 # Keep the Microsoft system DLLs intact; replacing them retains host CIcr pool.
