@@ -54,15 +54,9 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
         $hyperVRequested = ($DockerRunArguments -join ' ') -match '(?:^|\s)--isolation(?:=|\s+)hyperv(?:\s|$)'
         $isolation = if ($hyperVRequested -or $daemon.Isolation -eq 'hyperv') { 'hyperv' } else { 'process' }
         $identity = Invoke-DockerOutput -Context $Context -Arguments @('image', 'inspect', '--format', '{{.Id}} {{.OsVersion}}', $Image)
-        $imageVersion = ($identity -split ' ')[-1]
-        # This exact Microsoft full-Windows build retains four SSDP-startup catalog allocations
-        # in process isolation even without any Chocolatey layers (verified on Popo).
-        $knownBaseRetention = $isolation -eq 'process' -and
-            $Variant -match '^(?:windows|latest)(?:-ltsc2019)?$' -and
-            $imageVersion -eq '10.0.17763.9378'
-        $allowedBytes = if ($knownBaseRetention) { 306464L } else { 0L }
-        $allowedAllocations = if ($knownBaseRetention) { 4L } else { 0L }
-        Write-Information -InformationAction Continue -MessageData "CIcr host=$($daemon.Name); isolation=$isolation; image=$identity; baseAllowance=$allowedBytes/$allowedAllocations"
+        $allowedBytes = 0L
+        $allowedAllocations = 0L
+        Write-Information -InformationAction Continue -MessageData "CIcr host=$($daemon.Name); isolation=$isolation; image=$identity; allowance=$allowedBytes/$allowedAllocations"
         $activationSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fixtures/kernel-pool/Invoke-ShellActivation.ps1') -Raw
         $activationEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($activationSource))
 
@@ -91,7 +85,7 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
         }
     }
 
-    It 'adds no host CIcr beyond the verified Windows base after repeated <Workload> starts' -ForEach @(
+    It 'retains no host CIcr after repeated <Workload> starts' -ForEach @(
         @{ Workload = 'minimal'; ActivateShell = $false },
         @{ Workload = 'shell application'; ActivateShell = $true }
     ) {
@@ -133,14 +127,14 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
         Write-Information -InformationAction Continue -MessageData ("CIcr idle: {0} bytes, {1} allocations; sample={2}" -f
             ($idle.PagedBytes - $before.PagedBytes), ($idle.Outstanding - $before.Outstanding), ($idle | ConvertTo-Json -Compress))
         foreach ($delta in $deltas) {
-            $delta | Should -BeLessOrEqual $allowedBytes -Because 'container teardown must add no CIcr bytes beyond the verified Microsoft full-Windows base retention'
+            $delta | Should -BeLessOrEqual $allowedBytes -Because 'container teardown must add no host CIcr bytes'
         }
         foreach ($delta in $allocationDeltas) {
-            $delta | Should -BeLessOrEqual $allowedAllocations -Because 'container teardown must add no CIcr allocations beyond the verified Microsoft full-Windows base retention'
+            $delta | Should -BeLessOrEqual $allowedAllocations -Because 'container teardown must add no host CIcr allocations'
         }
         $idle.PagedBytes | Should -BeLessOrEqual $before.PagedBytes -Because 'idle observations must not add further CIcr retention'
         $idle.Outstanding | Should -BeLessOrEqual $before.Outstanding -Because 'idle observations must not add further CIcr allocations'
-        $idle.PagedBytes | Should -BeLessOrEqual ($current.PagedBytes + $deltas.Count * $allowedBytes) -Because 'cumulative retention must stay within the verified base allowance'
-        $idle.Outstanding | Should -BeLessOrEqual ($current.Outstanding + $allocationDeltas.Count * $allowedAllocations) -Because 'cumulative allocations must stay within the verified base allowance'
+        $idle.PagedBytes | Should -BeLessOrEqual ($current.PagedBytes + $deltas.Count * $allowedBytes) -Because 'cumulative retention must stay within the zero-byte allowance'
+        $idle.Outstanding | Should -BeLessOrEqual ($current.Outstanding + $allocationDeltas.Count * $allowedAllocations) -Because 'cumulative allocations must stay within the zero-allocation allowance'
     }
 }

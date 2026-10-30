@@ -154,6 +154,7 @@ Additional compatibility fixes support unattended package installation:
 | Firefox | Disables taskbar pinning to avoid an installer dialog that cannot be answered in a container |
 | PowerShell Core | Bounds parent-process diagnostics to avoid hangs caused by container PID reuse or CIM queries |
 | WinRM | Starts on demand to avoid host Code Integrity catalog retention during automatic listener initialization |
+| SSDP Discovery | Disabled on full Windows to avoid host Code Integrity catalog retention during container startup |
 
 The Firefox and PowerShell Core fixes run as Chocolatey pre-install hooks and
 preserve the normal installers. Explicit installer arguments still apply;
@@ -176,6 +177,16 @@ WinRM remains installed, with its service startup type set to Manual. Use
 in a derived image, run `sc.exe config WinRM start= auto`. Starting WinRM can
 reintroduce the inherited Windows Server 2019 CIcr retention described in
 [issue #7](https://github.com/Faulo/docker-choco/issues/7).
+
+Full Windows variants disable the SSDP Discovery service because its startup
+retains host Code Integrity pool memory after a process-isolated container stops.
+This removes Windows' built-in SSDP/UPnP device discovery; ordinary TCP
+connections, including localhost connections between processes in a container,
+do not use SSDP.
+Server Core does not include the service. If a derived image needs SSDP,
+restore Manual startup with `sc.exe config SSDPSRV start= demand` and start the
+service as needed. Doing so may restore the host-memory leak on affected Windows
+base-image builds.
 
 Package installers still need to support unattended execution and the selected
 Windows container environment. The compatibility fixes do not guarantee that
@@ -219,12 +230,13 @@ the context name must resolve as an SSH alias for the daemon's host, with 64-bit
 Windows PowerShell available. Hyper-V isolation measures the host kernel; it does
 not measure allocations inside the disposable utility VM.
 
-The pristine Microsoft full Windows LTSC 2019 image at build
-`10.0.17763.9378` itself retains 306,464 host CIcr bytes and four allocations
-per process-isolated start when SSDP Discovery initializes. The regression
-contract permits only that measured base-image amount for this exact full
-Windows build. Server Core and Hyper-V-isolated runs have no such allowance;
-a later Windows build needs a fresh baseline investigation if it changes.
+The regression contract allows zero retained host CIcr bytes and zero
+outstanding allocations after each measured start, for every tested Windows
+variant and base-image build. This detects new retention when future Windows
+updates are tested. On full Windows LTSC 2019 build `10.0.17763.9378`, SSDP
+Discovery in the pristine Microsoft base image retained 306,464 bytes and four
+allocations per process-isolated start; the service setting above addresses
+that measured source.
 
 ## Support and contributions
 
