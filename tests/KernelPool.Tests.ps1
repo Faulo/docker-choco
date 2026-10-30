@@ -21,14 +21,59 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
                 $selfContainer.Config.Hostname -eq $env:COMPUTERNAME -and
                 $selfContainer.Id.StartsWith($env:COMPUTERNAME, [StringComparison]::OrdinalIgnoreCase)
         }
-        $probePath = Join-Path $PSScriptRoot 'fixtures/kernel-pool/Read-CIcr.ps1'
-        $probeSource = Get-Content -LiteralPath $probePath -Raw
+        $poolProbe = {
+            $ErrorActionPreference = 'Stop'
+            if (-not [Environment]::Is64BitProcess) { throw 'Use 64-bit host PowerShell.' }
+            if (-not ('ContainerPoolProbe' -as [type])) {
+                Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class ContainerPoolProbe {
+    [DllImport("ntdll.dll")]
+    public static extern int NtQuerySystemInformation(int informationClass, IntPtr buffer, int length, out int required);
+}
+'@
+            }
+            $size = 4194304
+            while ($true) {
+                $buffer = [Runtime.InteropServices.Marshal]::AllocHGlobal($size)
+                try {
+                    $required = 0
+                    # SystemPoolTagInformation is 22; CIcr is 0x72634943 in little-endian tag bytes.
+                    $status = [ContainerPoolProbe]::NtQuerySystemInformation(22, $buffer, $size, [ref] $required)
+                    if ($status -eq -1073741820) {
+                        $size = [Math]::Max($size * 2, $required)
+                        continue
+                    }
+                    if ($status -ne 0) { throw "Pool query failed: $status" }
+                    $count = [Runtime.InteropServices.Marshal]::ReadInt32($buffer)
+                    if ($count -lt 0 -or (8L + 40L * $count) -gt $size) { throw 'Invalid pool-tag buffer length' }
+                    for ($index = 0; $index -lt $count; $index++) {
+                        $entry = [IntPtr]::Add($buffer, 8 + 40 * $index)
+                        if ([Runtime.InteropServices.Marshal]::ReadInt32($entry) -eq 0x72634943) {
+                            $allocated = [BitConverter]::ToUInt32([BitConverter]::GetBytes([Runtime.InteropServices.Marshal]::ReadInt32($entry, 4)), 0)
+                            $freed = [BitConverter]::ToUInt32([BitConverter]::GetBytes([Runtime.InteropServices.Marshal]::ReadInt32($entry, 8)), 0)
+                            [pscustomobject]@{
+                                Time = [DateTimeOffset]::UtcNow.ToString('o')
+                                HostName = $env:COMPUTERNAME
+                                PagedBytes = [Runtime.InteropServices.Marshal]::ReadInt64($entry, 16)
+                                Outstanding = ([long] $allocated - [long] $freed + 4294967296L) % 4294967296L
+                            }
+                            return
+                        }
+                    }
+                    throw 'CIcr pool tag absent'
+                } finally {
+                    [Runtime.InteropServices.Marshal]::FreeHGlobal($buffer)
+                }
+            }
+        }
         $probeEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes(
-            "& { $probeSource } | ForEach-Object { 'CIcr_SAMPLE:' + `$_.PagedBytes + ':' + `$_.Outstanding + ':' + `$_.HostName }"))
+            "& { $poolProbe } | ForEach-Object { 'CIcr_SAMPLE:' + `$_.PagedBytes + ':' + `$_.Outstanding + ':' + `$_.HostName }"))
 
         function Read-HostPool {
             if ($env:COMPUTERNAME -eq $daemon.Name -or $selfProcessContainer) {
-                $sample = & $probePath
+                $sample = & $poolProbe
             } else {
                 $sshHost = if ($Context -eq 'default') { $daemon.Name } else { $Context }
                 # Some Windows OpenSSH hosts cannot launch commands without a console.
@@ -54,15 +99,35 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
         $hyperVRequested = ($DockerRunArguments -join ' ') -match '(?:^|\s)--isolation(?:=|\s+)hyperv(?:\s|$)'
         $isolation = if ($hyperVRequested -or $daemon.Isolation -eq 'hyperv') { 'hyperv' } else { 'process' }
         $identity = Invoke-DockerOutput -Context $Context -Arguments @('image', 'inspect', '--format', '{{.Id}} {{.OsVersion}}', $Image)
-        $allowedBytes = 0L
-        $allowedAllocations = 0L
-        Write-Information -InformationAction Continue -MessageData "CIcr host=$($daemon.Name); isolation=$isolation; image=$identity; allowance=$allowedBytes/$allowedAllocations"
-        $activationSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fixtures/kernel-pool/Invoke-ShellActivation.ps1') -Raw
-        $activationEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($activationSource))
+        Write-Information -InformationAction Continue -MessageData "CIcr host=$($daemon.Name); isolation=$isolation; image=$identity; allowance=0/0"
+        $shellWorkload = {
+            $ErrorActionPreference = 'Stop'
+            Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class ShellActivationProbe {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr LoadLibraryW(string name);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    public static extern IntPtr FindExecutableW(string file, string directory, StringBuilder result);
+}
+'@
+            # Load the AppInit trigger and exercise shell32 without relying on image-specific DLLs.
+            foreach ($module in 'user32.dll', 'shell32.dll') {
+                if ([ShellActivationProbe]::LoadLibraryW($module) -eq [IntPtr]::Zero) {
+                    throw "Loading $module failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
+                }
+            }
+            [void] [ShellActivationProbe]::FindExecutableW(
+                (Join-Path $env:WINDIR 'System32/cmd.exe'), $null, [Text.StringBuilder]::new(260))
+            Write-Output 'SHELL_ACTIVATION completed'
+        }
+        $activationEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($shellWorkload.ToString()))
 
-        function Invoke-MinimalContainer {
+        function Invoke-ProbeContainer {
             param([bool] $ActivateShell)
-            $container = "choco-pool-$([guid]::NewGuid().ToString('N'))"
+            $container = "kernel-pool-$([guid]::NewGuid().ToString('N'))"
             try {
                 $command = if ($ActivateShell) {
                     @('--entrypoint', 'powershell.exe', $Image, '-NoProfile', '-NonInteractive', '-EncodedCommand', $activationEncoded)
@@ -109,7 +174,7 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
         $allocationDeltas = @()
         foreach ($iteration in 1..3) {
             $timer = [Diagnostics.Stopwatch]::StartNew()
-            Invoke-MinimalContainer -ActivateShell $ActivateShell
+            Invoke-ProbeContainer -ActivateShell $ActivateShell
             $timer.Stop()
             Start-Sleep -Seconds 10
             $after = Read-HostPool
@@ -127,14 +192,14 @@ Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne '
         Write-Information -InformationAction Continue -MessageData ("CIcr idle: {0} bytes, {1} allocations; sample={2}" -f
             ($idle.PagedBytes - $before.PagedBytes), ($idle.Outstanding - $before.Outstanding), ($idle | ConvertTo-Json -Compress))
         foreach ($delta in $deltas) {
-            $delta | Should -BeLessOrEqual $allowedBytes -Because 'container teardown must add no host CIcr bytes'
+            $delta | Should -BeLessOrEqual 0L -Because 'container teardown must add no host CIcr bytes'
         }
         foreach ($delta in $allocationDeltas) {
-            $delta | Should -BeLessOrEqual $allowedAllocations -Because 'container teardown must add no host CIcr allocations'
+            $delta | Should -BeLessOrEqual 0L -Because 'container teardown must add no host CIcr allocations'
         }
         $idle.PagedBytes | Should -BeLessOrEqual $before.PagedBytes -Because 'idle observations must not add further CIcr retention'
         $idle.Outstanding | Should -BeLessOrEqual $before.Outstanding -Because 'idle observations must not add further CIcr allocations'
-        $idle.PagedBytes | Should -BeLessOrEqual ($current.PagedBytes + $deltas.Count * $allowedBytes) -Because 'cumulative retention must stay within the zero-byte allowance'
-        $idle.Outstanding | Should -BeLessOrEqual ($current.Outstanding + $allocationDeltas.Count * $allowedAllocations) -Because 'cumulative allocations must stay within the zero-allocation allowance'
+        $idle.PagedBytes | Should -BeLessOrEqual $current.PagedBytes -Because 'cumulative retention must stay at or below the baseline'
+        $idle.Outstanding | Should -BeLessOrEqual $current.Outstanding -Because 'cumulative allocations must stay at or below the baseline'
     }
 }
