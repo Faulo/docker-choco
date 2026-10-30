@@ -1,17 +1,34 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Pester binds shared image data in separate script blocks.')]
 param(
+    [Parameter(Mandatory)]
     [string] $Namespace,
+
+    [Parameter(Mandatory)]
     [string] $Name,
+
+    [Parameter(Mandatory)]
     [string] $Variant,
+
+    [Parameter(Mandatory)]
     [string] $Context,
+
+    [Parameter(Mandatory)]
     [string] $Image,
+
+    [Parameter(Mandatory)]
     [string] $Os,
-    [AllowEmptyCollection()] [string[]] $DockerRunArguments
+
+    [Parameter(Mandatory)]
+    [AllowEmptyCollection()]
+    [string[]] $DockerRunArguments
 )
+
+BeforeAll {
+    . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
+}
 
 Describe "Host Code Integrity pool contract [$Context, $Image]" -Skip:($Os -ne 'windows') {
     BeforeAll {
-        . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
         $daemon = Invoke-DockerOutput -Context $Context -Arguments @('info', '--format', '{{json .}}') | ConvertFrom-Json
         $selfInspection = Get-DockerCommandResult -Context $Context -Arguments @('container', 'inspect', '--format', '{{json .}}', $env:COMPUTERNAME.ToLowerInvariant())
         $selfProcessContainer = $false

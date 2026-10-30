@@ -9,9 +9,12 @@ param(
     [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $DockerRunArguments
 )
 
+BeforeAll {
+    . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
+}
+
 Describe "Windows shell API contract [$Context, $Image]" {
     BeforeAll {
-        . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
         $container = "docker-choco-shell32-$([guid]::NewGuid().ToString('N'))"
         $fixture = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures/shell32'))
         Invoke-Docker -Context $Context -Arguments (@('create', '--tty', '--name', $container) + $DockerRunArguments + @($Image, 'cmd.exe'))

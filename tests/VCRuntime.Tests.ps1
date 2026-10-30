@@ -8,9 +8,12 @@ param(
     [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]] $DockerRunArguments
 )
 
+BeforeAll {
+    . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
+}
+
 Describe "Visual C++ prerequisites [$Context, $Image]" {
     BeforeAll {
-        . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
         $container = "docker-choco-vcruntime-$([guid]::NewGuid().ToString('N'))"
         $fixture = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'fixtures/vcruntime'))
         Invoke-Docker -Context $Context -Arguments (@('create', '--tty', '--name', $container) + $DockerRunArguments + @($Image, 'cmd.exe'))

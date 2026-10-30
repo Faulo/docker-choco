@@ -9,11 +9,11 @@ param(
     [AllowEmptyCollection()] [string[]] $DockerRunArguments
 )
 
-Describe "Windows remote management startup [$Context, $Image]" -Skip:($Os -ne 'windows') {
-    BeforeAll {
-        . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
-    }
+BeforeAll {
+    . (Join-Path $PSScriptRoot '../.jenkins/Docker.ps1')
+}
 
+Describe "Windows remote management startup [$Context, $Image]" -Skip:($Os -ne 'windows') {
     It 'keeps WinRM available without automatically initializing network listeners' {
         $source = @'
 $ErrorActionPreference = 'Stop'
