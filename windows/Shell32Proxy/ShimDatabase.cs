@@ -47,8 +47,8 @@ public static class ShimDatabase {
             Check(SdbWriteStringTag(database, 0x600A, "AcRes.dll"));
             Check(SdbWriteBinaryTag(database, 0x9010, new Guid("9d300b92-4780-437d-95ea-96277075e562").ToByteArray(), 16));
             Check(SdbWriteDWORDTag(database, runtimePlatform, platforms));
-            // Managed P/Invoke calls originate in the CLR, normally excluded by the shim engine.
-            foreach (string module in new[] { "clr.dll", "coreclr.dll", "mscorwks.dll" }) {
+            // Include managed callers and shell32's internal WinRT activation calls.
+            foreach (string module in new[] { "clr.dll", "coreclr.dll", "mscorwks.dll", "shell32.dll" }) {
                 uint include = Begin(database, 0x7003);
                 Check(SdbWriteStringTag(database, 0x6003, module));
                 Check(SdbWriteNULLTag(database, 0x1001));

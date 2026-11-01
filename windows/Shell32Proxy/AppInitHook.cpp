@@ -22,6 +22,12 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void*)
     chocoHookStatus |= 4;
     if (MH_QueueEnableHook(findExecutable) != MH_OK) return TRUE;
     if (MH_QueueEnableHook(shellExecuteEx) != MH_OK) return TRUE;
+    void* getFactory = reinterpret_cast<void*>(&::RoGetActivationFactory);
+    void* activate = reinterpret_cast<void*>(&::RoActivateInstance);
+    if (MH_CreateHook(getFactory, reinterpret_cast<void*>(HookRoGetActivationFactory), &hooks[2].Original) != MH_OK) return TRUE;
+    if (MH_CreateHook(activate, reinterpret_cast<void*>(HookRoActivateInstance), &hooks[3].Original) != MH_OK) return TRUE;
+    if (MH_QueueEnableHook(getFactory) != MH_OK) return TRUE;
+    if (MH_QueueEnableHook(activate) != MH_OK) return TRUE;
     if (MH_ApplyQueued() != MH_OK) return TRUE;
     chocoHookStatus |= 8;
     return TRUE;

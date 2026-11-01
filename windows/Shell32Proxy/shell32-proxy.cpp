@@ -1,9 +1,13 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <shlwapi.h>
+#include <roapi.h>
+#include <winstring.h>
 
 extern "C" HINSTANCE WINAPI HookFindExecutableW(LPCWSTR, LPCWSTR, LPWSTR);
 extern "C" BOOL WINAPI HookShellExecuteExW(SHELLEXECUTEINFOW*);
+extern "C" HRESULT WINAPI HookRoGetActivationFactory(HSTRING, REFIID, void**);
+extern "C" HRESULT WINAPI HookRoActivateInstance(HSTRING, IInspectable**);
 
 // Apphelp supplies the original entry points so other shims remain in the chain.
 struct HookApi
@@ -19,7 +23,9 @@ namespace
 {
 HookApi hooks[] = {
     { "shell32.dll", "FindExecutableW", reinterpret_cast<void*>(HookFindExecutableW), nullptr, {} },
-    { "shell32.dll", "ShellExecuteExW", reinterpret_cast<void*>(HookShellExecuteExW), nullptr, {} }
+    { "shell32.dll", "ShellExecuteExW", reinterpret_cast<void*>(HookShellExecuteExW), nullptr, {} },
+    { "combase.dll", "RoGetActivationFactory", reinterpret_cast<void*>(HookRoGetActivationFactory), nullptr, {} },
+    { "combase.dll", "RoActivateInstance", reinterpret_cast<void*>(HookRoActivateInstance), nullptr, {} }
 };
 }
 
@@ -216,6 +222,38 @@ extern "C" BOOL WINAPI HookShellExecuteExW(SHELLEXECUTEINFOW* executeInfo)
     }
 
     return TRUE;
+}
+
+bool IsUnavailableAssociation(HSTRING classId)
+{
+    // Keep the class registered: StateRepository needs it to serve unrelated
+    // classes such as ApplicationExtension during Media Foundation enumeration.
+    // Only application-side file association activation must fail promptly.
+    UINT32 length = 0;
+    const wchar_t* name = ::WindowsGetStringRawBuffer(classId, &length);
+    const wchar_t unavailable[] = L"Windows.Internal.StateRepository.FileTypeAssociation";
+    return length == (sizeof(unavailable) / sizeof(wchar_t)) - 1
+        && ::CompareStringOrdinal(name, static_cast<int>(length), unavailable, -1, FALSE) == CSTR_EQUAL;
+}
+
+extern "C" HRESULT WINAPI HookRoGetActivationFactory(HSTRING classId, REFIID iid, void** factory)
+{
+    if (IsUnavailableAssociation(classId)) {
+        if (factory != nullptr) *factory = nullptr;
+        return REGDB_E_CLASSNOTREG;
+    }
+    const auto original = reinterpret_cast<decltype(&::RoGetActivationFactory)>(hooks[2].Original);
+    return original == nullptr ? E_UNEXPECTED : original(classId, iid, factory);
+}
+
+extern "C" HRESULT WINAPI HookRoActivateInstance(HSTRING classId, IInspectable** instance)
+{
+    if (IsUnavailableAssociation(classId)) {
+        if (instance != nullptr) *instance = nullptr;
+        return REGDB_E_CLASSNOTREG;
+    }
+    const auto original = reinterpret_cast<decltype(&::RoActivateInstance)>(hooks[3].Original);
+    return original == nullptr ? E_UNEXPECTED : original(classId, instance);
 }
 
 extern "C" HookApi* WINAPI GetHookAPIs(LPSTR, LPWSTR name, PDWORD count)

@@ -28,7 +28,7 @@ foreach ($arch in 'x64', 'x86') {
     $notify = if ($arch -eq 'x86') { 'NotifyShims=_NotifyShims@8' } else { 'NotifyShims' }
     $environment = if ($env:CHOCO_TOOLCHAIN_ROOT) {
         $root = $env:CHOCO_TOOLCHAIN_ROOT
-        "set INCLUDE=$root/crt/include;$root/sdk/include/ucrt;$root/sdk/include/shared;$root/sdk/include/um`r`nset LIB=$root/sdk/lib/um/$arch"
+        "set INCLUDE=$root/crt/include;$root/sdk/include/ucrt;$root/sdk/include/shared;$root/sdk/include/um;$root/sdk/include/winrt`r`nset LIB=$root/sdk/lib/um/$arch"
     } else {
         "call `"$devcmd`" -arch=$arch -host_arch=x64`r`nif errorlevel 1 exit /b 1"
     }
@@ -37,7 +37,7 @@ foreach ($arch in 'x64', 'x86') {
 $environment
 "$compiler" --target=$target /nologo /c /GS- /Zl /O2 /W4 /WX /Fo"$obj" "$source"
 if errorlevel 1 exit /b 1
-"$linker" /NOLOGO /DLL /NOENTRY /NODEFAULTLIB /MACHINE:$arch /timestamp:0 /EXPORT:$getHooks /EXPORT:$notify /OUT:"$dll" /IMPLIB:"$lib" "$obj" kernel32.lib shlwapi.lib
+"$linker" /NOLOGO /DLL /NOENTRY /NODEFAULTLIB /MACHINE:$arch /timestamp:0 /EXPORT:$getHooks /EXPORT:$notify /OUT:"$dll" /IMPLIB:"$lib" "$obj" kernel32.lib shlwapi.lib runtimeobject.lib
 if errorlevel 1 exit /b 1
 "@
     [IO.File]::WriteAllText($batch, $commands)
@@ -65,7 +65,7 @@ if errorlevel 1 exit /b 1
         $lines += 'if errorlevel 1 exit /b 1'
     }
     $quotedObjects = ($objects | ForEach-Object { "`"$_`"" }) -join ' '
-    $lines += "`"$linker`" /NOLOGO /DLL /NODEFAULTLIB /MACHINE:$arch /timestamp:0 /ENTRY:DllMain /OUT:`"$hookDll`" $quotedObjects kernel32.lib shell32.lib shlwapi.lib"
+    $lines += "`"$linker`" /NOLOGO /DLL /NODEFAULTLIB /MACHINE:$arch /timestamp:0 /ENTRY:DllMain /OUT:`"$hookDll`" $quotedObjects kernel32.lib shell32.lib shlwapi.lib runtimeobject.lib"
     $lines += 'if errorlevel 1 exit /b 1'
     [IO.File]::WriteAllLines($hookBatch, $lines)
     & $env:ComSpec /c $hookBatch

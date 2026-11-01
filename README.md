@@ -150,7 +150,8 @@ Additional compatibility fixes support unattended package installation:
 
 | Area | Behavior |
 | --- | --- |
-| Windows shell | Fixes file-association lookup, executable launching, and shell file copies; disables AppX file-type association activation to avoid stalled file operations |
+| Windows shell | Fixes file-association lookup, executable launching, and shell file copies; bypasses AppX file-type association activation in applications to avoid stalled file operations |
+| Media Foundation | Preserves StateRepository registrations so video-decoder enumeration does not wait for an ApplicationExtension activation timeout |
 | Firefox | Disables taskbar pinning to avoid an installer dialog that cannot be answered in a container |
 | PowerShell Core | Bounds parent-process diagnostics to avoid hangs caused by container PID reuse or CIM queries |
 | WinRM | Starts on demand to avoid host Code Integrity catalog retention during automatic listener initialization |
@@ -171,6 +172,13 @@ Microsoft system DLLs remain intact. Windows disables AppInit when
 Secure Boot is enabled, so the shell fixes require process isolation in that
 configuration.
 Build-time compiler tools are absent from the published images.
+
+The shell compatibility hooks reject only activation of
+`Windows.Internal.StateRepository.FileTypeAssociation` in applications. Its
+Windows registration remains intact: deleting it or changing its activation type
+prevents unrelated StateRepository activation from completing promptly and
+adds a two-minute delay to Media Foundation video-decoder enumeration on
+LTSC 2019. Other WinRT activation calls retain their normal behavior.
 
 WinRM remains installed, with its service startup type set to Manual. Use
 `Start-Service WinRM` when a container needs it. To restore automatic startup
@@ -207,6 +215,9 @@ that digest explicitly when adopting a newer image.
 The repository includes NUnit unit tests for manifest parsing, dependency
 constraints, and process ancestry, plus Pester integration tests for installation
 planning, retries, exit codes, runtimes, and container compatibility.
+Media Foundation coverage checks successful video-decoder enumeration within
+ten seconds in fresh x86 and x64 processes, with a thirty-second process timeout.
+Server Core variants without Media Foundation report that coverage as skipped.
 
 To run the unit tests, install the .NET 9 SDK selected by
 [`global.json`](global.json), clone the repository, and run from its root:
