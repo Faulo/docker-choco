@@ -10,7 +10,7 @@ packages cannot be installed.
 
 Use these images as the starting point for Windows toolchains, services, and
 other software installed through Chocolatey. All variants include Chocolatey
-CLI v1, Visual C++ runtimes, and compatibility fixes for unattended installation
+CLI v1, Git for Windows, Visual C++ runtimes, and compatibility fixes for unattended installation
 in containers.
 
 [Docker Hub](https://hub.docker.com/r/faulo/choco) ·
@@ -142,6 +142,28 @@ NuGet dependency groups are not supported.
 
 ## Included runtimes and container compatibility
 
+All variants include the latest stable Git for Windows, declared in
+[`windows/choco.nuspec`](windows/choco.nuspec) and installed with `choco-install`
+through the Chocolatey `git` and `git.install` packages. Their package records remain intact
+so compatible downstream dependencies reuse the installed client. `git.exe` is
+on the machine PATH, including for service users and direct `docker exec` calls.
+
+Git uses Schannel system-wide with certificate verification enabled. The default
+`curl.exe` is the Windows-provided client in `C:\Windows\System32`, also using
+Schannel. Both use Windows certificate trust; provision private CA certificates
+in the appropriate Windows certificate store. No OpenSSL CA bundle or TLS
+verification bypass is configured. Explicit downstream Git configuration can
+override these defaults.
+
+On LTSC 2019, WinHTTP Web Proxy Auto-Discovery runs in a dedicated service-host
+process. This applies Microsoft's [workaround for shared-process RPC endpoint
+exhaustion](https://jpwinsup.github.io/blog/2022/08/12/Networking/TCPIP/Failed-to-start-WinHTTP-Web-Proxy-Auto-Discovery-Service/):
+stopping the dedicated process releases its endpoint registrations. The service
+keeps its normal account, permissions, and demand-start behavior. LTSC 2022
+retains its native service configuration and Windows fix. Downstream images must
+rebuild and containers must be recreated to adopt this change; updating an image
+does not repair the runtime state of an existing container.
+
 All variants include Visual C++ 2005, 2008, 2010, 2012, 2013, and current v14
 runtimes in both x86 and x64 architectures. Their Chocolatey package records
 are retained so compatible dependencies can reuse them without reinstalling.
@@ -155,6 +177,7 @@ Additional compatibility fixes support unattended package installation:
 | Firefox | Disables taskbar pinning to avoid an installer dialog that cannot be answered in a container |
 | PowerShell Core | Bounds parent-process diagnostics to avoid hangs caused by container PID reuse or CIM queries |
 | WinRM | Starts on demand to avoid host Code Integrity catalog retention during automatic listener initialization |
+| WinHTTP | Uses a dedicated service-host process on LTSC 2019 to prevent endpoint exhaustion across service restarts |
 | SSDP Discovery | Disabled on full Windows to avoid host Code Integrity catalog retention during container startup |
 
 The Firefox and PowerShell Core fixes run as Chocolatey pre-install hooks and
@@ -203,7 +226,7 @@ every Chocolatey package can run in a container.
 ## Maintenance and updates
 
 The four variants listed above are rebuilt monthly to pick up Windows base-image
-updates and the latest stable Chocolatey **v1** release. The images currently
+updates, the latest stable Git for Windows, and the latest stable Chocolatey **v1** release. The images currently
 target CLI v1; they do not include Chocolatey CLI v2.
 
 Published tags receive updates in place. Rebuild downstream images with
@@ -218,6 +241,17 @@ planning, retries, exit codes, runtimes, and container compatibility.
 Media Foundation coverage checks successful video-decoder enumeration within
 ten seconds in fresh x86 and x64 processes, with a thirty-second process timeout.
 Server Core variants without Media Foundation report that coverage as skipped.
+
+Git/WinHTTP coverage checks installed package reuse, effective executables and TLS
+configuration, bounded HTTPS operations under application and service identities,
+and 550 accelerated WinHTTP service cycles. The test needs access to GitHub and
+Microsoft's public symbol server. Its test-only helper signals WinHTTP's normal
+shutdown event using matching public symbols; it does not modify Windows binaries
+or service permissions. See the [reproduction instructions](tests/reproductions/winhttp).
+The published LTSC 2019 baseline reproduced endpoint exhaustion at 500 registered
+WinHTTP endpoints and service event 7024. GitHub HTTPS remained successful in the
+minimal reproductions, so that service failure alone does not establish
+the additional conditions behind downstream TLS hangs.
 
 To run the unit tests, install the .NET 9 SDK selected by
 [`global.json`](global.json), clone the repository, and run from its root:

@@ -68,3 +68,19 @@ RUN $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'); \
     [Environment]::SetEnvironmentVariable('Path', ('C:\choco\bin;' + $machinePath), 'Machine'); \
     $env:Path = 'C:\choco\bin;' + $env:Path; \
     Get-Command choco,choco-install -CommandType Application -ErrorAction Stop | Out-Null
+
+COPY windows/choco.nuspec C:/choco/packages/choco.nuspec
+# hadolint shell=powershell
+RUN choco-install C:/choco/packages/choco.nuspec; \
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to install baseline dependencies' }; \
+    Remove-Item -LiteralPath C:/choco/packages -Recurse -Force
+
+# A fresh process inherits Git's machine PATH entry.
+# hadolint shell=powershell
+# hadolint ignore=DL3059
+RUN git.exe config --system http.sslBackend schannel; \
+    if ($LASTEXITCODE -ne 0) { throw 'Git TLS backend configuration failed' }; \
+    git.exe config --system http.sslVerify true; \
+    if ($LASTEXITCODE -ne 0) { throw 'Git certificate verification configuration failed' }; \
+    git.exe --version; \
+    if ($LASTEXITCODE -ne 0) { throw 'Git smoke check failed' }
