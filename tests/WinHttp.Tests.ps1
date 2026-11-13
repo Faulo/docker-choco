@@ -58,13 +58,10 @@ if ((Get-Item (Get-Command git.exe).Source).LastWriteTimeUtc -ne $before) { thro
         $output | Should -Match 'GIT_CURL_HTTPS_OK'
     }
 
-    It 'keeps WinHTTP endpoints bounded beyond the previous exhaustion threshold' {
+    It 'keeps WinHTTP endpoints bounded beyond exhaustion and verifies HTTPS afterward for service users' {
         $output = Invoke-DockerOutput -Context $Context -Arguments @('exec', '--user', 'NT AUTHORITY\SYSTEM', $container, 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:/contract/Invoke-Lifecycle.ps1', '-RequireBounded')
         Write-Host $output
         $output | Should -Match 'WINHTTP_LIFECYCLE_OK'
-    }
-
-    It 'performs verified Git and curl HTTPS after cycling, including service users' {
         foreach ($user in @('ContainerAdministrator', 'NT AUTHORITY\SYSTEM', 'NT AUTHORITY\NETWORK SERVICE')) {
             $output = Invoke-DockerOutput -Context $Context -Arguments @('exec', '--user', $user, $container, 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:/contract/Invoke-Https.ps1')
             Write-Host $output

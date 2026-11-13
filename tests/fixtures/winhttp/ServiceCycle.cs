@@ -4,16 +4,8 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 // Test-only acceleration: signal the service's normal shutdown event. WinHTTP
-// does not accept SCM stop controls. Resolve the event from matching public symbols.
+// does not accept SCM stop controls. ServiceEventLocator verifies its location.
 public static class ServiceCycle {
-    [DllImport("dbghelp.dll", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern bool SymInitialize(IntPtr process, string searchPath, bool invade);
-    [DllImport("dbghelp.dll", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern ulong SymLoadModuleEx(IntPtr process, IntPtr file, string image, string module, ulong address, uint size, IntPtr data, uint flags);
-    [DllImport("dbghelp.dll", SetLastError = true, CharSet = CharSet.Ansi)]
-    private static extern bool SymFromName(IntPtr process, string name, IntPtr symbol);
-    [DllImport("dbghelp.dll")]
-    private static extern bool SymCleanup(IntPtr process);
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint access, bool inherit, int processId);
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -28,24 +20,6 @@ public static class ServiceCycle {
     private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
     [DllImport("kernel32.dll")]
     private static extern IntPtr GetCurrentProcess();
-
-    public static long Resolve(string image, string symbols) {
-        IntPtr process = GetCurrentProcess();
-        if (!SymInitialize(process, symbols, false)) { throw new Win32Exception(); }
-        IntPtr info = Marshal.AllocHGlobal(2048);
-        try {
-            ulong module = SymLoadModuleEx(process, IntPtr.Zero, image, "cycleprobe", 0, 0, IntPtr.Zero, 0);
-            if (module == 0) { throw new Win32Exception(); }
-            for (int i = 0; i < 2048; i++) { Marshal.WriteByte(info, i, 0); }
-            Marshal.WriteInt32(info, 88);
-            Marshal.WriteInt32(info, 80, 1024);
-            if (!SymFromName(process, "cycleprobe!g_hSvcStopEvent", info)) { throw new Win32Exception(); }
-            return Marshal.ReadInt64(info, 56) - (long)module;
-        } finally {
-            Marshal.FreeHGlobal(info);
-            SymCleanup(process);
-        }
-    }
 
     public static void Stop(int processId, long eventRva, bool waitForExit) {
         Process.EnterDebugMode();

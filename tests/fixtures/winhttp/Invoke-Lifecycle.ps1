@@ -4,21 +4,11 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 Add-Type -Path (Join-Path $PSScriptRoot 'RpcEndpoints.cs')
 Add-Type -Path (Join-Path $PSScriptRoot 'ServiceCycle.cs')
+Add-Type -Path (Join-Path $PSScriptRoot 'ServiceEventLocator.cs')
 $dll = Join-Path $env:WINDIR 'System32/winhttp.dll'
-$bytes = [IO.File]::ReadAllBytes($dll)
-$offset = [Text.Encoding]::ASCII.GetString($bytes).IndexOf('RSDS')
-if ($offset -lt 0) { throw 'WinHTTP CodeView identity is absent' }
-$guidBytes = New-Object byte[] 16
-[Array]::Copy($bytes, $offset + 4, $guidBytes, 0, 16)
-$identity = (New-Object Guid (,$guidBytes)).ToString('N').ToUpperInvariant() + [BitConverter]::ToUInt32($bytes, $offset + 20).ToString('X')
-$symbols = Join-Path $env:TEMP "winhttp-symbols-$identity"
-New-Item -ItemType Directory -Path $symbols -Force | Out-Null
-$pdb = Join-Path $symbols 'winhttp.pdb'
-if (-not (Test-Path $pdb)) {
-    Invoke-WebRequest -UseBasicParsing -Uri "https://msdl.microsoft.com/download/symbols/winhttp.pdb/$identity/winhttp.pdb" -OutFile $pdb -TimeoutSec 120
-}
-$eventRva = [ServiceCycle]::Resolve($dll, $symbols)
-"WINHTTP_SYMBOLS=$identity STOP_EVENT_RVA=$eventRva"
+"WINHTTP_VERSION=$((Get-Item $dll).VersionInfo.FileVersion) SHA256=$((Get-FileHash $dll -Algorithm SHA256).Hash)"
+$eventRva = [ServiceEventLocator]::Resolve($dll)
+"STOP_EVENT_RVA=$eventRva"
 $started = Get-Date
 
 function Get-EndpointCount {

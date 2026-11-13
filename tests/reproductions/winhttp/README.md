@@ -22,9 +22,11 @@ Use the candidate image directly instead of building the Git addition, and pass
 `-RequireBounded` to the lifecycle probe. The integration test automates candidate
 checks, including HTTPS under service identities and installed Git dependency reuse.
 
-The lifecycle probe downloads the matching WinHTTP public PDB from Microsoft's
-symbol server and resolves `g_hSvcStopEvent`. WinHTTP rejects normal SCM stop
-controls. To avoid waiting through hundreds of 27-minute idle periods, the probe
+The lifecycle probe locates the shutdown event in the AMD64 WinHTTP service entry
+point. It checks the event creation calls, their imported API, the stop callback
+reference, and the writable event slot, and rejects unrecognized layouts. No PDB
+download is needed. WinHTTP rejects normal SCM stop controls.
+To avoid waiting through hundreds of 27-minute idle periods, the probe
 duplicates and signals the service's existing shutdown event, then starts the
 service again through SCM. It does not patch Windows binaries or change service
 permissions. Dedicated service processes must finish exiting before the next

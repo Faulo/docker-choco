@@ -244,14 +244,22 @@ Server Core variants without Media Foundation report that coverage as skipped.
 
 Git/WinHTTP coverage checks installed package reuse, effective executables and TLS
 configuration, bounded HTTPS operations under application and service identities,
-and 550 accelerated WinHTTP service cycles. The test needs access to GitHub and
-Microsoft's public symbol server. Its test-only helper signals WinHTTP's normal
-shutdown event using matching public symbols; it does not modify Windows binaries
-or service permissions. See the [reproduction instructions](tests/reproductions/winhttp).
+and 550 accelerated WinHTTP service cycles. The test needs access to GitHub.
+Its test-only helper locates and signals WinHTTP's normal shutdown event by checking
+the AMD64 service entry point's event initialization and callback reference. It
+fails on unrecognized layouts, without modifying Windows binaries or service
+permissions, and does not require Microsoft's symbol server. HTTPS checks after
+cycling run only when the lifecycle assertions pass.
+See the [reproduction instructions](tests/reproductions/winhttp).
 The published LTSC 2019 baseline reproduced endpoint exhaustion at 500 registered
 WinHTTP endpoints and service event 7024. GitHub HTTPS remained successful in the
 minimal reproductions, so that service failure alone does not establish
 the additional conditions behind downstream TLS hangs.
+
+The Docker workflow runs both published LTSC 2022 variants on a Windows Server
+2025 runner with Hyper-V isolation. Jenkins covers LTSC 2019 on Dende and Popo
+with process isolation. Hyper-V checks do not replace the host pool checks on
+those process-isolated hosts.
 
 To run the unit tests, install the .NET 9 SDK selected by
 [`global.json`](global.json), clone the repository, and run from its root:
@@ -275,10 +283,15 @@ the context name must resolve as an SSH alias for the daemon's host, with 64-bit
 Windows PowerShell available. Hyper-V isolation measures the host kernel; it does
 not measure allocations inside the disposable utility VM.
 
-The regression contract allows zero retained host CIcr bytes and zero
-outstanding allocations after each measured start, for every tested Windows
-variant and base-image build. This detects new retention when future Windows
-updates are tested. On full Windows LTSC 2019 build `10.0.17763.9378`, SSDP
+The regression contract allows zero additional host CIcr bytes and zero
+additional outstanding allocations after each measured start on a warm host,
+for every tested Windows variant and base-image build. Each workload has exactly
+one unasserted warm-up start, whose byte and allocation deltas are logged, followed
+by three measured starts and an idle observation. Warm-ups are never retried until
+the test passes. This checks recurring retention; it does not promise zero
+first-start host signature/catalog caching after a reboot. Process-isolated
+containers share the host kernel, so that kernel state can survive their removal.
+On full Windows LTSC 2019 build `10.0.17763.9378`, SSDP
 Discovery in the pristine Microsoft base image retained 306,464 bytes and four
 allocations per process-isolated start; the service setting above addresses
 that measured source.
