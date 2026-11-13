@@ -155,12 +155,12 @@ in the appropriate Windows certificate store. No OpenSSL CA bundle or TLS
 verification bypass is configured. Explicit downstream Git configuration can
 override these defaults.
 
-On LTSC 2019, WinHTTP Web Proxy Auto-Discovery runs in a dedicated service-host
+On LTSC 2019 and LTSC 2022, WinHTTP Web Proxy Auto-Discovery runs in a dedicated service-host
 process. This applies Microsoft's [workaround for shared-process RPC endpoint
 exhaustion](https://jpwinsup.github.io/blog/2022/08/12/Networking/TCPIP/Failed-to-start-WinHTTP-Web-Proxy-Auto-Discovery-Service/):
 stopping the dedicated process releases its endpoint registrations. The service
-keeps its normal account, permissions, and demand-start behavior. LTSC 2022
-retains its native service configuration and Windows fix. Downstream images must
+keeps its normal account, permissions, and demand-start behavior. Both LTSC releases
+reproduced endpoint exhaustion in container images with a shared service host. Downstream images must
 rebuild and containers must be recreated to adopt this change; updating an image
 does not repair the runtime state of an existing container.
 
@@ -177,7 +177,7 @@ Additional compatibility fixes support unattended package installation:
 | Firefox | Disables taskbar pinning to avoid an installer dialog that cannot be answered in a container |
 | PowerShell Core | Bounds parent-process diagnostics to avoid hangs caused by container PID reuse or CIM queries |
 | WinRM | Starts on demand to avoid host Code Integrity catalog retention during automatic listener initialization |
-| WinHTTP | Uses a dedicated service-host process on LTSC 2019 to prevent endpoint exhaustion across service restarts |
+| WinHTTP | Uses a dedicated service-host process on both LTSC releases to prevent endpoint exhaustion across service restarts |
 | SSDP Discovery | Disabled on full Windows to avoid host Code Integrity catalog retention during container startup |
 
 The Firefox and PowerShell Core fixes run as Chocolatey pre-install hooks and
@@ -251,9 +251,9 @@ fails on unrecognized layouts, without modifying Windows binaries or service
 permissions, and does not require Microsoft's symbol server. HTTPS checks after
 cycling run only when the lifecycle assertions pass.
 See the [reproduction instructions](tests/reproductions/winhttp).
-The published LTSC 2019 baseline reproduced endpoint exhaustion at 500 registered
-WinHTTP endpoints and service event 7024. GitHub HTTPS remained successful in the
-minimal reproductions, so that service failure alone does not establish
+The published LTSC 2019 and LTSC 2022 baselines reproduced endpoint exhaustion at
+500 registered WinHTTP endpoints and service event 7024. GitHub HTTPS remained
+successful in the LTSC 2019 minimal reproductions, so that service failure alone does not establish
 the additional conditions behind downstream TLS hangs.
 
 The Docker workflow runs both published LTSC 2022 variants on a Windows Server

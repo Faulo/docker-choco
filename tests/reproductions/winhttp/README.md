@@ -1,7 +1,7 @@
 # WinHTTP lifecycle reproduction
 
 Run only in disposable containers on an explicitly selected Windows daemon.
-Both LTSC 2019 families need independent runs. Record `docker image inspect`
+Both image families and both LTSC releases need independent runs. Record `docker image inspect`
 output (digest and OS version), daemon version, and container isolation mode.
 
 For an old published baseline, build the minimal Git addition from the repository
@@ -21,6 +21,11 @@ docker --context popo rm --force --volumes choco-winhttp-reproduction
 Use the candidate image directly instead of building the Git addition, and pass
 `-RequireBounded` to the lifecycle probe. The integration test automates candidate
 checks, including HTTPS under service identities and installed Git dependency reuse.
+
+For LTSC 2022, select the corresponding LTSC-specific image and a compatible
+Windows 11 or Windows Server 2022-or-newer daemon. The published build
+`10.0.20348.5870` also exhausted 500 endpoints in a shared service host; the
+dedicated-process workaround therefore applies to both supported LTSC releases.
 
 The lifecycle probe locates the shutdown event in the AMD64 WinHTTP service entry
 point. It checks the event creation calls, their imported API, the stop callback
