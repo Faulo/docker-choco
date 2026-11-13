@@ -2,12 +2,17 @@ name: Docker
 
 on:
   workflow_dispatch:
+    inputs:
+      core_only:
+        description: Validate only Server Core
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: issue-9-candidate-${{ github.ref }}
+  group: issue-9-candidate-${{ github.ref }}-${{ inputs.core_only }}
   cancel-in-progress: false
 
 jobs:
@@ -18,11 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: windows-ltsc2022
-            base: mcr.microsoft.com/windows/server:ltsc2022
-          - variant: windowsservercore-ltsc2022
-            base: mcr.microsoft.com/windows/servercore:ltsc2022
+        include: ${{ fromJSON(inputs.core_only && '[{"variant":"windowsservercore-ltsc2022","base":"mcr.microsoft.com/windows/servercore:ltsc2022"}]' || '[{"variant":"windows-ltsc2022","base":"mcr.microsoft.com/windows/server:ltsc2022"},{"variant":"windowsservercore-ltsc2022","base":"mcr.microsoft.com/windows/servercore:ltsc2022"}]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check out runner preparation
