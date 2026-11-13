@@ -1,41 +1,41 @@
 name: Docker
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
-  schedule:
-    - cron: "17 3 1 * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: docker-publish
+  group: issue-9-candidate-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  docker:
-    uses: Faulo/workflows-docker/.github/workflows/docker.yml@v3
-    with:
-      config: docker.json
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  integration-2022:
-    name: Integration (${{ matrix.variant }})
-    needs: docker
+  candidate-2022:
+    name: Candidate (${{ matrix.variant }})
     runs-on: windows-2025
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        variant:
-          - windows-ltsc2022
-          - windowsservercore-ltsc2022
+        include:
+          - variant: windows-ltsc2022
+            base: mcr.microsoft.com/windows/server:ltsc2022
+          - variant: windowsservercore-ltsc2022
+            base: mcr.microsoft.com/windows/servercore:ltsc2022
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out runner preparation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Faulo/workflows-docker
+          ref: v3
+          path: .reports/workflow
+          persist-credentials: false
+      - name: Reclaim Visual Studio disk space
+        env:
+          CLEANUP_WINDOWS_RUNNER: 'true'
+        run: python .reports/workflow/scripts/prepare_windows_runner.py
       - name: Prepare Windows Docker
         shell: pwsh
         run: |
@@ -49,7 +49,6 @@ jobs:
               if ($attempt -eq 24) { throw 'Windows Docker daemon did not become ready' }
               Start-Sleep -Seconds 5
           }
-          # The newer runner needs a matching guest kernel for LTSC 2022.
           $environment = Get-Content .env -Raw
           $environment = $environment -replace '(?m)^DOCKER_ARGS_WINDOWS=.*$', 'DOCKER_ARGS_WINDOWS=--isolation=hyperv'
           Set-Content .env $environment
@@ -61,16 +60,44 @@ jobs:
         run: |
           $env:DOCKERHUB_TOKEN | docker --context windows login --username $env:DOCKERHUB_USERNAME --password-stdin
           if ($LASTEXITCODE) { throw 'Docker Hub authentication failed' }
-      - name: Test published image
+      - name: Build candidate
+        shell: pwsh
+        env:
+          VARIANT: ${{ matrix.variant }}
+          BASE_IMAGE: ${{ matrix.base }}
+          DOCKER_BUILDKIT: '0'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $configuration = ConvertFrom-StringData (Get-Content .env -Raw)
+          $imageName = $configuration.DOCKER_IMAGE
+          $published = $configuration.DOCKER_NAMESPACE + '/' + $imageName + ':' + $env:VARIANT
+          $candidate = 'tmp/' + $imageName + ':' + $env:VARIANT
+          docker --context windows pull $published
+          if ($LASTEXITCODE) { throw 'Cannot pull the published build cache' }
+          docker --context windows build --pull --isolation hyperv --cache-from $published --build-arg "BASE_IMAGE=$env:BASE_IMAGE" --file windows/Dockerfile --tag $candidate .
+          if ($LASTEXITCODE) { throw 'Candidate build failed' }
+          docker --context windows image inspect $candidate --format '{{.Id}} {{.OsVersion}}'
+          if ($LASTEXITCODE) { throw 'Candidate inspection failed' }
+      - name: Verify WinHTTP regression
         shell: pwsh
         env:
           VARIANT: ${{ matrix.variant }}
         run: |
-          & ./.jenkins/Invoke-IntegrationTests.ps1 -Pull -Context windows -Variant $env:VARIANT -ResultsPath .reports/integration.xml
-      - name: Store integration report
+          & ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context windows -Variant $env:VARIANT -TestsPath tests/WinHttp.Tests.ps1 -ResultsPath .reports/winhttp.xml
+          if ($LASTEXITCODE) { throw 'WinHTTP candidate regression failed' }
+      - name: Test complete candidate
+        shell: pwsh
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          & ./.jenkins/Invoke-IntegrationTests.ps1 -Namespace tmp -Context windows -Variant $env:VARIANT -ResultsPath .reports/integration.xml
+          if ($LASTEXITCODE) { throw 'Complete candidate integration failed' }
+      - name: Store integration reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: integration-${{ matrix.variant }}
-          path: .reports/integration.xml
+          name: candidate-${{ matrix.variant }}
+          path: |
+            .reports/winhttp.xml
+            .reports/integration.xml
           if-no-files-found: warn
