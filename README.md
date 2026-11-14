@@ -179,6 +179,7 @@ Additional compatibility fixes support unattended package installation:
 | WinRM | Starts on demand to avoid host Code Integrity catalog retention during automatic listener initialization |
 | WinHTTP | Uses a dedicated service-host process on both LTSC releases to prevent endpoint exhaustion across service restarts |
 | SSDP Discovery | Disabled on full Windows to avoid host Code Integrity catalog retention during container startup |
+| Downloaded Maps Manager | Starts on demand where present to avoid host Code Integrity catalog retention after delayed automatic startup |
 
 The Firefox and PowerShell Core fixes run as Chocolatey pre-install hooks and
 preserve the normal installers. Explicit installer arguments still apply;
@@ -218,6 +219,15 @@ Server Core does not include the service. If a derived image needs SSDP,
 restore Manual startup with `sc.exe config SSDPSRV start= demand` and start the
 service as needed. Doing so may restore the host-memory leak on affected Windows
 base-image builds.
+
+Downloaded Maps Manager (`MapsBroker`) remains installed where provided by the
+Windows base image, with Manual startup. Its delayed automatic startup can retain
+host Code Integrity pool memory after container teardown; full Windows LTSC 2019
+build `10.0.17763.9488` reproduced 310,560 bytes and four allocations per container
+on Dende after roughly two minutes. Use `Start-Service MapsBroker` when an
+application needs downloaded maps. A derived image can restore delayed automatic
+startup with `sc.exe config MapsBroker start= delayed-auto`, which may reintroduce
+the retention on affected hosts.
 
 Package installers still need to support unattended execution and the selected
 Windows container environment. The compatibility fixes do not guarantee that
@@ -275,7 +285,8 @@ the Docker build badge above reports image publication status.
 
 The host CIcr regression tests require a stable host baseline. Avoid concurrent
 builds and container starts during these tests. They check retained bytes and
-outstanding allocations after minimal starts and shell API use, including an idle
+outstanding allocations after minimal starts, shell API use, and 150-second
+container lifetimes that exercise delayed service startup, each followed by an idle
 observation. Jenkins runs the integration suite on Dende and Popo. The pool probe
 reads the host kernel directly when run on the host or inside a verified
 process-isolated container on that daemon. For other remote Windows contexts,
