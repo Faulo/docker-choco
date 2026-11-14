@@ -144,10 +144,12 @@ public static class ShellActivationProbe {
         $activationEncoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($shellWorkload.ToString()))
 
         function Invoke-ProbeContainer {
-            param([bool] $ActivateShell)
+            param([bool] $ActivateShell, [int] $HoldSeconds = 0)
             $container = "kernel-pool-$([guid]::NewGuid().ToString('N'))"
             try {
-                $command = if ($ActivateShell) {
+                $command = if ($HoldSeconds -gt 0) {
+                    @('--entrypoint', 'powershell.exe', $Image, '-NoProfile', '-NonInteractive', '-Command', "Start-Sleep -Seconds $HoldSeconds")
+                } elseif ($ActivateShell) {
                     @('--entrypoint', 'powershell.exe', $Image, '-NoProfile', '-NonInteractive', '-EncodedCommand', $activationEncoded)
                 } else {
                     @('--entrypoint', 'cmd.exe', $Image, '/d', '/c', 'exit', '0')
@@ -169,14 +171,16 @@ public static class ShellActivationProbe {
     }
 
     It 'retains no additional host CIcr after repeated warm <Workload> starts' -ForEach @(
-        @{ Workload = 'minimal'; ActivateShell = $false },
-        @{ Workload = 'shell application'; ActivateShell = $true }
+        @{ Workload = 'minimal'; ActivateShell = $false; HoldSeconds = 0 },
+        @{ Workload = 'shell application'; ActivateShell = $true; HoldSeconds = 0 },
+        # Delayed automatic services start after roughly two minutes on Windows.
+        @{ Workload = 'delayed service'; ActivateShell = $false; HoldSeconds = 150 }
     ) {
         # One fixed warm-up per workload permits initial host signature/catalog caching.
         # Never retry warm-ups until growth disappears: repeated retention must still fail.
         $null = Read-HostPool
         $warmBefore = Read-HostPool
-        Invoke-ProbeContainer -ActivateShell $ActivateShell
+        Invoke-ProbeContainer -ActivateShell $ActivateShell -HoldSeconds $HoldSeconds
         Start-Sleep -Seconds 10
         $warmAfter = Read-HostPool
         Write-Information -InformationAction Continue -MessageData ("CIcr warm-up ({0}): {1} bytes, {2} allocations; before={3}; after={4}" -f
@@ -200,7 +204,7 @@ public static class ShellActivationProbe {
         $allocationDeltas = @()
         foreach ($iteration in 1..3) {
             $timer = [Diagnostics.Stopwatch]::StartNew()
-            Invoke-ProbeContainer -ActivateShell $ActivateShell
+            Invoke-ProbeContainer -ActivateShell $ActivateShell -HoldSeconds $HoldSeconds
             $timer.Stop()
             Start-Sleep -Seconds 10
             $after = Read-HostPool

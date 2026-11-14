@@ -179,6 +179,7 @@ Additional compatibility fixes support unattended package installation:
 | WinRM | Starts on demand to avoid host Code Integrity catalog retention during automatic listener initialization |
 | WinHTTP | Uses a dedicated service-host process on both LTSC releases to prevent endpoint exhaustion across service restarts |
 | SSDP Discovery | Disabled on full Windows to avoid host Code Integrity catalog retention during container startup |
+| Delayed services | Starts Downloaded Maps Manager and Update Orchestrator on demand on full LTSC 2019 to avoid recurring host Code Integrity catalog retention |
 
 The Firefox and PowerShell Core fixes run as Chocolatey pre-install hooks and
 preserve the normal installers. Explicit installer arguments still apply;
@@ -218,6 +219,18 @@ Server Core does not include the service. If a derived image needs SSDP,
 restore Manual startup with `sc.exe config SSDPSRV start= demand` and start the
 service as needed. Doing so may restore the host-memory leak on affected Windows
 base-image builds.
+
+Full Windows LTSC 2019 also sets Downloaded Maps Manager (`MapsBroker`) and
+Update Orchestrator (`UsoSvc`) to Manual when they are configured for automatic
+startup. Both delayed startup paths can retain host CIcr allocations after a
+container stops; changing only one service does not prevent the other path.
+The services remain installed and can start on demand. Starting them can
+reintroduce the retention on affected hosts. To restore delayed automatic
+startup in a derived image, run `sc.exe config MapsBroker start= delayed-auto`
+and `sc.exe config UsoSvc start= delayed-auto`.
+Windows containers receive OS updates by rebuilding from refreshed base images,
+as described in [Microsoft's container update guidance](https://learn.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/update-containers).
+Server Core, LTSC 2022, and services already configured as Disabled are unchanged.
 
 Package installers still need to support unattended execution and the selected
 Windows container environment. The compatibility fixes do not guarantee that
@@ -273,9 +286,11 @@ integration tests under [`tests`](tests) require Pester, a compatible Windows
 container engine, and the images being tested. They exercise all four variants;
 the Docker build badge above reports image publication status.
 
-The host CIcr regression tests require a stable host baseline. Avoid concurrent
-builds and container starts during these tests. They check retained bytes and
-outstanding allocations after minimal starts and shell API use, including an idle
+The host CIcr regression tests require a stable host baseline. After a reboot,
+allow host servicing and activation activity to settle, and avoid concurrent
+builds and container starts during measurement. They check retained bytes and
+outstanding allocations after minimal starts, shell API use, and 150-second
+container lifetimes that exercise delayed service startup, each followed by an idle
 observation. Jenkins runs the integration suite on Dende and Popo. The pool probe
 reads the host kernel directly when run on the host or inside a verified
 process-isolated container on that daemon. For other remote Windows contexts,

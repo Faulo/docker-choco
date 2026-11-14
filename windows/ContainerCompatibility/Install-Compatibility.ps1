@@ -13,3 +13,13 @@ if (Get-Service -Name SSDPSRV -ErrorAction SilentlyContinue) {
     & (Join-Path $env:WINDIR 'System32/sc.exe') config SSDPSRV start= disabled
     if ($LASTEXITCODE -ne 0) { throw "SSDP startup configuration failed with exit code $LASTEXITCODE" }
 }
+
+# Both delayed services retain host CIcr catalogs on full LTSC 2019; changing only MapsBroker is insufficient.
+if ([Environment]::OSVersion.Version.Build -eq 17763 -and (Get-Service -Name MapsBroker -ErrorAction SilentlyContinue)) {
+    foreach ($name in 'MapsBroker', 'UsoSvc') {
+        if ((Get-Service -Name $name).StartType -eq 'Automatic') {
+            & (Join-Path $env:WINDIR 'System32/sc.exe') config $name start= demand
+            if ($LASTEXITCODE -ne 0) { throw "$name startup configuration failed with exit code $LASTEXITCODE" }
+        }
+    }
+}
