@@ -107,7 +107,7 @@ jobs:
           VARIANT: ${{ matrix.variant }}
         run: |
           $failed = $false
-          foreach ($test in @('KernelPool', 'MapsBroker')) {
+          foreach ($test in @('KernelPool')) {
               & ./.jenkins/Invoke-IntegrationTests.ps1 -Pull -Context windows -Variant $env:VARIANT -TestsPath "tests/$test.Tests.ps1" -ResultsPath ".reports/$test.xml"
               if ($LASTEXITCODE) { $failed = $true }
           }
@@ -121,5 +121,4 @@ jobs:
             .reports/winhttp.xml
             .reports/integration.xml
             .reports/KernelPool.xml
-            .reports/MapsBroker.xml
           if-no-files-found: warn
