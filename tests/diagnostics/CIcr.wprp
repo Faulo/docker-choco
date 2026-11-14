@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0" Author="Codex">
+  <Profiles>
+    <SystemCollector Id="CIcrCollector" Name="CIcr investigation">
+      <BufferSize Value="1024" />
+      <Buffers Value="128" />
+    </SystemCollector>
+    <SystemProvider Id="CIcrProvider">
+      <Keywords>
+        <Keyword Value="ProcessThread" />
+        <Keyword Value="Loader" />
+        <Keyword Value="Pool" />
+      </Keywords>
+      <Stacks>
+        <Stack Value="PoolAllocation" />
+        <Stack Value="PoolAllocationSession" />
+      </Stacks>
+      <PoolTags>
+        <PoolTag Value="CIcr" />
+      </PoolTags>
+    </SystemProvider>
+    <Profile Id="CIcr.Verbose.File" Name="CIcr" Description="CIcr pool attribution" DetailLevel="Verbose" LoggingMode="File">
+      <Collectors>
+        <SystemCollectorId Value="CIcrCollector">
+          <SystemProviderId Value="CIcrProvider" />
+        </SystemCollectorId>
+      </Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>

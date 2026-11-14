@@ -84,6 +84,16 @@ jobs:
           if ($LASTEXITCODE) { throw 'Candidate build failed' }
           docker --context windows image inspect $candidate --format '{{.Id}} {{.OsVersion}}'
           if ($LASTEXITCODE) { throw 'Candidate inspection failed' }
+      - name: Start host pool trace
+        if: ${{ !inputs.published_only }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $status = wpr.exe -status | Out-String
+          if ($status -notmatch 'WPR is not recording') { throw 'Another WPR recording is active' }
+          wpr.exe -start tests/diagnostics/CIcr.wprp!CIcr -filemode
+          if ($LASTEXITCODE) { throw 'Cannot start host pool trace' }
+          New-Item -ItemType File -Path .reports/host-pool-trace-started | Out-Null
       - name: Verify WinHTTP regression
         if: ${{ !inputs.published_only }}
         shell: pwsh
@@ -112,6 +122,14 @@ jobs:
               if ($LASTEXITCODE) { $failed = $true }
           }
           if ($failed) { throw 'Published image does not satisfy the delayed-startup contract' }
+      - name: Stop host pool trace
+        if: ${{ always() && !inputs.published_only }}
+        shell: pwsh
+        run: |
+          if (Test-Path .reports/host-pool-trace-started) {
+              wpr.exe -stop .reports/host-pool.etl
+              if ($LASTEXITCODE) { throw 'Cannot stop host pool trace' }
+          }
       - name: Store integration reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -121,4 +139,5 @@ jobs:
             .reports/winhttp.xml
             .reports/integration.xml
             .reports/KernelPool.xml
+            .reports/host-pool.etl
           if-no-files-found: warn
